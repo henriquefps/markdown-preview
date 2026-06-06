@@ -1,0 +1,296 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Theme Definitions */
+:root {
+  /* Default: Light Theme */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Fira Code', monospace;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-light: rgba(99, 102, 241, 0.1);
+  --border-color: #e2e8f0;
+  --card-bg: #ffffff;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Markdown styling vars */
+  --md-code-bg: #f1f5f9;
+  --md-table-header-bg: #f8fafc;
+  --md-table-zebra: #f8fafc;
+  --md-quote-bg: #f8fafc;
+  --md-quote-border: #cbd5e1;
+  --transition-speed: 0.2s;
+}
+
+/* Dark Theme */
+.theme-dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #64748b;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-light: rgba(129, 140, 248, 0.15);
+  --border-color: #334155;
+  --card-bg: #1e293b;
+
+  /* Markdown styling vars */
+  --md-code-bg: #1e293b;
+  --md-table-header-bg: #1e293b;
+  --md-table-zebra: #0f172a;
+  --md-quote-bg: #1e293b;
+  --md-quote-border: #475569;
+}
+
+/* Sepia Theme */
+.theme-sepia {
+  --bg-primary: #f4ecd8;
+  --bg-secondary: #eae0c9;
+  --bg-tertiary: #dfd4b9;
+  --text-primary: #5c4033;
+  --text-secondary: #705335;
+  --text-tertiary: #a08060;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-light: rgba(217, 119, 6, 0.1);
+  --border-color: #dfd4b9;
+  --card-bg: #f4ecd8;
+
+  /* Markdown styling vars */
+  --md-code-bg: #eae0c9;
+  --md-table-header-bg: #eae0c9;
+  --md-table-zebra: #eae0c9;
+  --md-quote-bg: #eae0c9;
+  --md-quote-border: #b45309;
+}
+
+/* Cyberpunk Theme */
+.theme-cyberpunk {
+  --bg-primary: #0a0a16;
+  --bg-secondary: #120e2e;
+  --bg-tertiary: #211651;
+  --text-primary: #00ffcc;
+  --text-secondary: #ff007f;
+  --text-tertiary: #7b2cbf;
+  --accent: #00ffcc;
+  --accent-hover: #ff007f;
+  --accent-light: rgba(0, 255, 204, 0.15);
+  --border-color: #ff007f;
+  --card-bg: #120e2e;
+
+  /* Markdown styling vars */
+  --md-code-bg: #120e2e;
+  --md-table-header-bg: #211651;
+  --md-table-zebra: #120e2e;
+  --md-quote-bg: #211651;
+  --md-quote-border: #ff007f;
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+  overflow-x: hidden;
+  height: 100vh;
+}
+
+/* App Container */
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  border-inline: none;
+  text-align: left;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Printable layout table styling (screen fallback) */
+.print-layout-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+}
+
+.print-layout-table>thead,
+.print-layout-table>tfoot {
+  display: none;
+}
+
+.print-layout-table>tbody>tr>td {
+  padding: 0;
+  border: none !important;
+}
+
+/* Printing styles for PDF export */
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  /* Override all theme variables to Light Mode for printing */
+  :root,
+  body,
+  [class*="theme-"] {
+    --bg-primary: #ffffff !important;
+    --bg-secondary: #f8fafc !important;
+    --bg-tertiary: #f1f5f9 !important;
+    --text-primary: #0f172a !important;
+    --text-secondary: #475569 !important;
+    --text-tertiary: #94a3b8 !important;
+    --accent: #6366f1 !important;
+    --accent-hover: #4f46e5 !important;
+    --accent-light: rgba(99, 102, 241, 0.1) !important;
+    --border-color: #e2e8f0 !important;
+    --card-bg: #ffffff !important;
+
+    --md-code-bg: #f1f5f9 !important;
+    --md-table-header-bg: #f8fafc !important;
+    --md-table-zebra: #f8fafc !important;
+    --md-quote-bg: #f8fafc !important;
+    --md-quote-border: #cbd5e1 !important;
+  }
+
+  body,
+  html,
+  #root {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide editor, toolbar, settings, and other non-print elements */
+  .no-print,
+  header,
+  .toolbar,
+  .editor-pane,
+  .resizer,
+  .theme-toggle-container,
+  .action-buttons,
+  .settings-menu {
+    display: none !important;
+  }
+
+  /* Make the preview pane take full width and height */
+  .preview-pane {
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+  }
+
+  .print-layout-table {
+    display: table !important;
+    width: 100% !important;
+    border: none !important;
+    border-collapse: collapse !important;
+  }
+
+  .print-layout-table>thead {
+    display: table-header-group !important;
+  }
+
+  .print-layout-table>tfoot {
+    display: table-footer-group !important;
+  }
+
+  .print-layout-table>tbody {
+    display: table-row-group !important;
+  }
+
+  .print-layout-table>tbody>tr>td {
+    padding-left: var(--preview-margin, 2rem) !important;
+    padding-right: var(--preview-margin, 2rem) !important;
+    border: none !important;
+  }
+
+  /* .print-layout-table tfoot,
+  .print-layout-table thead,
+  .print-layout-table thead>tr,
+  .print-layout-table thead>td>td,
+  .print-layout-table tbody>tr,
+  .print-layout-table tbody>tr>td {
+    border: none !important;
+  } */
+
+  .print-layout-table * {
+    border: none transparent !important;
+  }
+
+  .print-margin-spacer {
+    height: var(--preview-margin, 2rem);
+    display: block;
+    border: none transparent !important;
+  }
+
+  .markdown-body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    font-family: var(--preview-font-family, var(--font-sans)) !important;
+    font-size: var(--preview-font-size, 1rem) !important;
+    line-height: var(--preview-line-height, 1.7) !important;
+  }
+
+  /* Ensure page breaks are handled nicely */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    page-break-after: avoid;
+  }
+
+  pre,
+  code,
+  blockquote,
+  tr,
+  img {
+    page-break-inside: avoid;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+}
