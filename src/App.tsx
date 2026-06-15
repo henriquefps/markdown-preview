@@ -83,8 +83,32 @@ function App() {
   });
 
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'split'>('split');
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'split'>(() => {
+    const saved = localStorage.getItem('active-tab') as 'editor' | 'preview' | 'split';
+    if (['editor', 'preview', 'split'].includes(saved)) {
+      if (window.innerWidth <= 768 && saved === 'split') {
+        return 'editor';
+      }
+      return saved;
+    }
+    return window.innerWidth <= 768 ? 'editor' : 'split';
+  });
+
   const [isSyncScrollEnabled, setIsSyncScrollEnabled] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem('active-tab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768 && activeTab === 'split') {
+        setActiveTab('editor');
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeTab]);
 
   // Preview / PDF custom settings
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('preview-font-family') || "'Inter', system-ui, sans-serif");
@@ -204,6 +228,31 @@ function App() {
             <FileText size={24} />
           </div>
           <span className="brand-title">Markdown Previewer</span>
+        </div>
+
+        {/* View Mode Segmented Control */}
+        <div className="view-mode-selector">
+          <button
+            className={activeTab === 'editor' ? 'active' : ''}
+            onClick={() => setActiveTab('editor')}
+            title="Mostrar apenas o Editor"
+          >
+            Editor
+          </button>
+          <button
+            className={`desktop-only ${activeTab === 'split' ? 'active' : ''}`}
+            onClick={() => setActiveTab('split')}
+            title="Mostrar Split (Editor + Preview)"
+          >
+            Split
+          </button>
+          <button
+            className={activeTab === 'preview' ? 'active' : ''}
+            onClick={() => setActiveTab('preview')}
+            title="Mostrar apenas o Preview"
+          >
+            Preview
+          </button>
         </div>
 
         <div className="control-section">
@@ -348,27 +397,6 @@ function App() {
         </div>
       </header>
 
-      {/* Mobile View Toggle */}
-      <div className="view-toggle no-print">
-        <button
-          className={`view-toggle-btn ${activeTab === 'editor' ? 'active' : ''}`}
-          onClick={() => setActiveTab('editor')}
-        >
-          Editor
-        </button>
-        <button
-          className={`view-toggle-btn ${activeTab === 'preview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('preview')}
-        >
-          Preview
-        </button>
-        <button
-          className={`view-toggle-btn ${activeTab === 'split' ? 'active' : ''}`}
-          onClick={() => setActiveTab('split')}
-        >
-          Split
-        </button>
-      </div>
 
       {/* Editor & Previewer Workspace */}
       <main className="workspace">

@@ -147,6 +147,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   border: none;
+  table-layout: fixed;
 }
 
 .print-layout-table>thead,
@@ -209,11 +210,14 @@ body {
     display: none !important;
   }
 
-  /* Make the preview pane take full width and height */
-  .preview-pane {
+  /* Make the preview pane and its containers take full width/height and allow printing flow */
+  .workspace,
+  .preview-pane,
+  .preview-container {
     width: 100% !important;
     height: auto !important;
     overflow: visible !important;
+    display: block !important;
     padding: 0 !important;
     background-color: #ffffff !important;
   }
@@ -285,7 +289,7 @@ body {
   pre,
   code,
   blockquote,
-  tr,
+  .markdown-body table tr,
   img {
     page-break-inside: avoid;
   }
