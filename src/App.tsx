@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
-import { FileText, Download, Moon, Sun, Link2, Link2Off, Settings } from 'lucide-react';
+import { 
+  FileText, Download, Moon, Sun, Link2, Link2Off, Settings,
+  Plus, Trash2, Edit2, Search, Menu, X
+} from 'lucide-react';
 import './components/MarkdownViewer.css';
 
 const SAMPLE_MARKDOWN = `# Markdown Previewer Showcase 🚀
@@ -57,7 +60,7 @@ graph TD
     D --> G
     E --> G
     F --> G
-Defined Custom Styles --> G
+    Defined Custom Styles --> G
 \`\`\`
 
 ### 📝 Task List
@@ -71,11 +74,61 @@ Defined Custom Styles --> G
 
 type Theme = 'light' | 'dark' | 'sepia' | 'cyberpunk';
 
+interface MarkdownFile {
+  id: string;
+  title: string;
+  content: string;
+  updatedAt: number;
+}
+
 function App() {
-  const [markdown, setMarkdown] = useState<string>(() => {
-    const saved = localStorage.getItem('markdown-content');
-    return saved !== null ? saved : SAMPLE_MARKDOWN;
+  const [files, setFiles] = useState<MarkdownFile[]>(() => {
+    const saved = localStorage.getItem('markdown-files');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Error parsing files", e);
+      }
+    }
+    // Fallback: create default sample file
+    const defaultFile: MarkdownFile = {
+      id: 'default',
+      title: 'Showcase.md',
+      content: SAMPLE_MARKDOWN,
+      updatedAt: Date.now()
+    };
+    // Migrate legacy content if it exists
+    const legacyContent = localStorage.getItem('markdown-content');
+    if (legacyContent && legacyContent !== SAMPLE_MARKDOWN) {
+      const migratedFile: MarkdownFile = {
+        id: 'migrated',
+        title: 'Draft.md',
+        content: legacyContent,
+        updatedAt: Date.now()
+      };
+      return [migratedFile, defaultFile];
+    }
+    return [defaultFile];
   });
+
+  const [activeFileId, setActiveFileId] = useState<string>(() => {
+    const savedActive = localStorage.getItem('active-file-id');
+    if (savedActive && files.some(f => f.id === savedActive)) {
+      return savedActive;
+    }
+    return files[0]?.id || 'default';
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    return window.innerWidth > 768;
+  });
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme') as Theme;
@@ -135,16 +188,32 @@ function App() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync state to local storage
+  // Sync files and active file ID to local storage
   useEffect(() => {
-    localStorage.setItem('markdown-content', markdown);
-  }, [markdown]);
+    localStorage.setItem('markdown-files', JSON.stringify(files));
+  }, [files]);
+
+  useEffect(() => {
+    localStorage.setItem('active-file-id', activeFileId);
+  }, [activeFileId]);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
     // Apply theme class to document body
     document.body.className = `theme-${theme}`;
   }, [theme]);
+
+  const activeFile = files.find(f => f.id === activeFileId) || files[0] || { id: '', title: '', content: '' };
+  const markdown = activeFile.content;
+
+  const setMarkdown = (newContent: string) => {
+    setFiles(prev => prev.map(f => {
+      if (f.id === activeFileId) {
+        return { ...f, content: newContent, updatedAt: Date.now() };
+      }
+      return f;
+    }));
+  };
 
   // Synchronized Scrolling Logic
   useEffect(() => {
@@ -194,6 +263,70 @@ function App() {
     };
   }, [isSyncScrollEnabled, markdown, activeTab]);
 
+  const handleCreateFile = () => {
+    const newId = `file_${Date.now()}`;
+    const newFile: MarkdownFile = {
+      id: newId,
+      title: 'Untitled.md',
+      content: '# Untitled\n\nStart writing here...',
+      updatedAt: Date.now()
+    };
+    setFiles(prev => [newFile, ...prev]);
+    setActiveFileId(newId);
+    setEditingFileId(newId);
+    setEditingTitle('Untitled.md');
+    if (window.innerWidth <= 768) {
+      setIsSidebarOpen(false);
+    }
+  };
+
+  const handleDeleteFile = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const fileToDelete = files.find(f => f.id === id);
+    if (!fileToDelete) return;
+    if (window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) {
+      const remainingFiles = files.filter(f => f.id !== id);
+      if (remainingFiles.length === 0) {
+        const defaultFile: MarkdownFile = {
+          id: 'default',
+          title: 'Showcase.md',
+          content: SAMPLE_MARKDOWN,
+          updatedAt: Date.now()
+        };
+        setFiles([defaultFile]);
+        setActiveFileId('default');
+      } else {
+        setFiles(remainingFiles);
+        if (activeFileId === id) {
+          setActiveFileId(remainingFiles[0].id);
+        }
+      }
+      if (editingFileId === id) {
+        setEditingFileId(null);
+      }
+    }
+  };
+
+  const handleStartRename = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingFileId(id);
+    setEditingTitle(currentTitle);
+  };
+
+  const handleSaveRename = (id: string) => {
+    if (!editingTitle.trim()) {
+      setEditingFileId(null);
+      return;
+    }
+    setFiles(prev => prev.map(f => {
+      if (f.id === id) {
+        return { ...f, title: editingTitle.trim(), updatedAt: Date.now() };
+      }
+      return f;
+    }));
+    setEditingFileId(null);
+  };
+
   const handleClear = () => {
     if (window.confirm('Are you sure you want to clear the editor?')) {
       setMarkdown('');
@@ -219,13 +352,24 @@ function App() {
     }
   };
 
+  const filteredFiles = files.filter(f => 
+    f.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <>
+    <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
       {/* App Header */}
       <header className="app-header no-print">
         <div className="brand-section">
+          <button 
+            className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title={isSidebarOpen ? "Fechar painel lateral" : "Abrir painel lateral"}
+          >
+            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <div className="brand-logo">
-            <FileText size={24} />
+            <img src="/logo.png" alt="MD Logo" style={{ width: '24px', height: '24px', borderRadius: '4px' }} />
           </div>
           <span className="brand-title">Markdown Previewer</span>
         </div>
@@ -397,34 +541,121 @@ function App() {
         </div>
       </header>
 
+      <div className="main-content-layout">
+        {/* Sidebar */}
+        <aside className="sidebar no-print">
+          <div className="sidebar-header">
+            <button className="new-file-btn" onClick={handleCreateFile}>
+              <Plus size={16} />
+              <span>New File</span>
+            </button>
+          </div>
 
-      {/* Editor & Previewer Workspace */}
-      <main className="workspace">
-        {(activeTab === 'editor' || activeTab === 'split') && (
-          <Editor
-            value={markdown}
-            onChange={setMarkdown}
-            onClear={handleClear}
-            onLoadSample={handleLoadSample}
-            textareaRef={textareaRef}
-          />
-        )}
+          <div className="sidebar-search">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Pesquisar arquivos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Limpar pesquisa">
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-        {activeTab === 'split' && <div className="resizer no-print" />}
+          <div className="file-list">
+            {filteredFiles.map((file) => {
+              const isActive = file.id === activeFileId;
+              const isEditing = file.id === editingFileId;
 
-        {(activeTab === 'preview' || activeTab === 'split') && (
-          <Preview
-            markdown={markdown}
-            previewContainerRef={previewContainerRef}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            lineHeight={lineHeight}
-            margin={margin}
-          />
-        )}
-      </main>
-    </>
+              return (
+                <div
+                  key={file.id}
+                  className={`file-item ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveFileId(file.id);
+                    if (window.innerWidth <= 768) {
+                      setIsSidebarOpen(false);
+                    }
+                  }}
+                >
+                  <FileText size={16} className="file-icon" />
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="file-rename-input"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={() => handleSaveRename(file.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename(file.id);
+                        if (e.key === 'Escape') setEditingFileId(null);
+                      }}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="file-title">{file.title}</span>
+                  )}
+                  <div className="file-actions">
+                    {!isEditing && (
+                      <button
+                        className="file-action-btn"
+                        onClick={(e) => handleStartRename(file.id, file.title, e)}
+                        title="Renomear"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                    <button
+                      className="file-action-btn delete"
+                      onClick={(e) => handleDeleteFile(file.id, e)}
+                      title="Excluir"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {filteredFiles.length === 0 && (
+              <div className="empty-search">Nenhum arquivo encontrado</div>
+            )}
+          </div>
+        </aside>
+
+        {/* Editor & Previewer Workspace */}
+        <main className="workspace">
+          {(activeTab === 'editor' || activeTab === 'split') && (
+            <Editor
+              value={markdown}
+              onChange={setMarkdown}
+              onClear={handleClear}
+              onLoadSample={handleLoadSample}
+              textareaRef={textareaRef}
+            />
+          )}
+
+          {activeTab === 'split' && <div className="resizer no-print" />}
+
+          {(activeTab === 'preview' || activeTab === 'split') && (
+            <Preview
+              markdown={markdown}
+              previewContainerRef={previewContainerRef}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              lineHeight={lineHeight}
+              margin={margin}
+            />
+          )}
+        </main>
+      </div>
+    </div>
   );
 }
 
 export default App;
+
