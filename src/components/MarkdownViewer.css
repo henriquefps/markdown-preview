@@ -182,6 +182,16 @@
   overflow: hidden;
 }
 
+/* Screen-only: the inactive pane (Editor or Preview) is kept mounted so its
+   state/renders (e.g. Mermaid diagrams) survive tab switches, and so PDF
+   export always has preview content regardless of which tab is on screen.
+   This must never apply while printing, hence the media scoping. */
+@media screen {
+  .pane-hidden {
+    display: none !important;
+  }
+}
+
 .pane-header {
   display: flex;
   justify-content: space-between;
@@ -430,16 +440,26 @@
 }
 
 /* Tables */
+.markdown-body .table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  max-width: 100%;
+}
+
 .markdown-body table {
   width: 100%;
+  min-width: 100%;
   border-collapse: collapse;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
+  table-layout: auto;
 }
 
 .markdown-body th,
 .markdown-body td {
   padding: 0.6rem 1rem;
   border: 1px solid var(--border-color);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body th {
@@ -536,6 +556,16 @@
 
   .desktop-only {
     display: none !important;
+  }
+
+  /* iOS/Android auto-zoom the page when a focused input's computed font-size
+     is under 16px. Bump these to 16px on mobile so tapping into the editor
+     (or search/rename fields) doesn't trigger an unwanted zoom. */
+  .editor-textarea,
+  .line-numbers,
+  .sidebar-search input,
+  .file-rename-input {
+    font-size: 16px;
   }
 
   /* Responsive Header for Mobile */

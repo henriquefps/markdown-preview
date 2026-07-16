@@ -60,7 +60,6 @@ graph TD
     D --> G
     E --> G
     F --> G
-    Defined Custom Styles --> G
 \`\`\`
 
 ### 📝 Task List
@@ -339,7 +338,18 @@ function App() {
     }
   };
 
-  const triggerPrint = () => {
+  const triggerPrint = async () => {
+    // Custom web fonts (Inter, Fira Code) load asynchronously; printing before
+    // they're ready causes the browser to fall back to a substitute font that
+    // can be missing glyphs (e.g. arrows) for the moment the PDF is captured.
+    try {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, 1000))
+      ]);
+    } catch {
+      // Ignore font-loading errors and print with whatever is available.
+    }
     window.print();
   };
 
@@ -629,28 +639,30 @@ function App() {
 
         {/* Editor & Previewer Workspace */}
         <main className="workspace">
-          {(activeTab === 'editor' || activeTab === 'split') && (
-            <Editor
-              value={markdown}
-              onChange={setMarkdown}
-              onClear={handleClear}
-              onLoadSample={handleLoadSample}
-              textareaRef={textareaRef}
-            />
-          )}
+          {/* Both panes stay mounted at all times (visibility is CSS-only, screen-scoped).
+              Exporting to PDF always prints the preview regardless of which tab is
+              active on screen, and Mermaid diagrams stay pre-rendered instead of
+              re-rendering every time the user switches tabs. */}
+          <Editor
+            value={markdown}
+            onChange={setMarkdown}
+            onClear={handleClear}
+            onLoadSample={handleLoadSample}
+            textareaRef={textareaRef}
+            hidden={activeTab === 'preview'}
+          />
 
           {activeTab === 'split' && <div className="resizer no-print" />}
 
-          {(activeTab === 'preview' || activeTab === 'split') && (
-            <Preview
-              markdown={markdown}
-              previewContainerRef={previewContainerRef}
-              fontFamily={fontFamily}
-              fontSize={fontSize}
-              lineHeight={lineHeight}
-              margin={margin}
-            />
-          )}
+          <Preview
+            markdown={markdown}
+            previewContainerRef={previewContainerRef}
+            fontFamily={fontFamily}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            margin={margin}
+            hidden={activeTab === 'editor'}
+          />
         </main>
       </div>
     </div>

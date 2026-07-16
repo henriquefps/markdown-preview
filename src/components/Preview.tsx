@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -13,6 +13,7 @@ interface PreviewProps {
   fontSize: string;
   lineHeight: string;
   margin: string;
+  hidden?: boolean;
 }
 
 // Custom schema for rehype-sanitize to allow inline base64 images
@@ -34,17 +35,22 @@ export const Preview: React.FC<PreviewProps> = ({
   fontFamily,
   fontSize,
   lineHeight,
-  margin
+  margin,
+  hidden
 }) => {
-  // Custom code component to render Mermaid diagrams or standard code blocks
-  const CodeBlockComponent = ({ node, className, children, ...props }: any) => {
-    const isInline = !className || !className.startsWith('language-');
+  // Custom code component to render Mermaid diagrams or standard code blocks.
+  // react-markdown v9+ no longer passes an `inline` prop, so block-level fences
+  // are distinguished from inline spans by whether the source node spans multiple
+  // lines (a fence always does, even without a language tag).
+  const CodeBlockComponent: Components['code'] = ({ node, className, children, ...props }) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const isMultiLine = node?.position && node.position.start.line !== node.position.end.line;
+    const isInline = !isMultiLine && !match;
 
     if (isInline) {
       return <code className={className} {...props}>{children}</code>;
     }
 
-    const match = /language-(\w+)/.exec(className || '');
     const codeString = String(children).replace(/\n$/, '');
 
     if (match && match[1] === 'mermaid') {
@@ -52,11 +58,24 @@ export const Preview: React.FC<PreviewProps> = ({
     }
 
     // Standard Code Block component with Copy button
-    return <CustomCodeBlock code={codeString} language={match ? match[1] : 'text'} {...props} />;
+    return <CustomCodeBlock code={codeString} language={match ? match[1] : 'text'} />;
   };
 
+  // react-markdown always wraps the `code` renderer's output in its own default
+  // `<pre>`, which would nest our CustomCodeBlock's <pre> inside another <pre>
+  // (invalid HTML, doubled padding/border). We take over that wrapping ourselves.
+  const PreComponent: Components['pre'] = ({ children }) => <>{children}</>;
+
+  // Wrap tables in a horizontally scrollable container so wide tables no longer
+  // force the whole page/monitor to widen to be readable.
+  const TableComponent: Components['table'] = ({ children, ...props }) => (
+    <div className="table-wrapper">
+      <table {...props}>{children}</table>
+    </div>
+  );
+
   return (
-    <div className="preview-pane" style={{ flex: 1 }}>
+    <div className={`preview-pane${hidden ? ' pane-hidden' : ''}`} style={{ flex: 1 }}>
       <div className="pane-header no-print">
         <span>Preview</span>
       </div>
@@ -84,7 +103,9 @@ export const Preview: React.FC<PreviewProps> = ({
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
                     components={{
-                      code: CodeBlockComponent
+                      code: CodeBlockComponent,
+                      pre: PreComponent,
+                      table: TableComponent
                     }}
                   >
                     {markdown}

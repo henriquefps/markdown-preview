@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Fonts are loaded via <link> tags in index.html, not @import here: Chrome's
+   print/PDF-export pipeline runs a separate rendering pass that unreliably
+   resolves fonts pulled in through CSS @import (a well-documented Chromium
+   quirk), which was causing exported PDFs to lay out text correctly but
+   paint no glyphs at all. A <link>-loaded stylesheet is tracked as a normal
+   document resource and does not have that problem. */
 
 /* Theme Definitions */
 :root {
@@ -191,11 +196,15 @@ body {
 
   body,
   html,
-  #root {
+  #root,
+  .app-container,
+  .main-content-layout {
     background-color: #ffffff !important;
     color: #000000 !important;
     height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
+    display: block !important;
   }
 
   /* Hide editor, toolbar, settings, and other non-print elements */
@@ -290,11 +299,38 @@ body {
   code,
   blockquote,
   .markdown-body table tr,
+  .mermaid-container,
   img {
     page-break-inside: avoid;
   }
 
   a {
     text-decoration: underline;
+  }
+
+  /* There is no scrollbar on paper: a wide table must fit the page instead of
+     being clipped by the wrapper's horizontal scroll container. */
+  .markdown-body .table-wrapper {
+    overflow-x: visible !important;
+  }
+
+  .markdown-body table {
+    table-layout: fixed !important;
+  }
+
+  /* Repeat the table header on every page a table spans across. */
+  .markdown-body table thead {
+    display: table-header-group;
+  }
+
+  /* The mobile sidebar's dark backdrop (a ::after pseudo-element, so it can't
+     carry a .no-print class) is scoped to a max-width media query that isn't
+     reliably respected by Chrome's print pipeline, letting a translucent
+     gray/blurred overlay leak on top of the whole printed page. Kill it
+     outright for print regardless of sidebar/viewport state. */
+  .sidebar,
+  .main-content-layout::after {
+    display: none !important;
+    content: none !important;
   }
 }

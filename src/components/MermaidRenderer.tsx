@@ -36,16 +36,16 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
         if (isMounted) {
           setSvg(renderedSvg);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Mermaid parsing error:', err);
-        
+
         // Extract a clean message
         let errMsg = 'Failed to render Mermaid diagram.';
         if (err instanceof Error) {
           errMsg = err.message;
         } else if (typeof err === 'string') {
           errMsg = err;
-        } else if (err.str) {
+        } else if (err && typeof err === 'object' && 'str' in err && typeof err.str === 'string') {
           errMsg = err.str;
         }
         

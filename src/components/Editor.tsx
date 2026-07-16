@@ -11,9 +11,10 @@ interface EditorProps {
   onClear: () => void;
   onLoadSample: () => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  hidden?: boolean;
 }
 
-export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoadSample, textareaRef }) => {
+export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoadSample, textareaRef, hidden }) => {
   const lineNumbersRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -125,7 +126,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   };
 
   return (
-    <div className="editor-pane" style={{ flex: 1 }}>
+    <div className={`editor-pane${hidden ? ' pane-hidden' : ''}`} style={{ flex: 1 }}>
       <div className="pane-header no-print">
         <span>Editor</span>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
