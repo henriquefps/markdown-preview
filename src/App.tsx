@@ -34,6 +34,15 @@ Created by [Henrique Silva](https://hfps.dev) using React and Vite.
 | Cloudflare Pages | Hosting Platform | ⭐⭐⭐⭐⭐ |
 | Mermaid.js | Diagrams | ⭐⭐⭐⭐ |
 
+### 🔢 Mathematical Notation (LaTeX)
+Inline math renders right in the middle of a sentence: as $x \\rightarrow \\infty$, the function converges to $a \\leftarrow b$.
+
+Block equations get their own centered line:
+
+$$
+\\int_0^\\infty e^{-x} \\, dx = 1 \\qquad \\sum_{i=1}^n i = \\frac{n(n+1)}{2}
+$$
+
 ### 💻 Code Syntax Highlighting
 Here is an example of an inline code snippet: \`const app = new MarkdownPreviewer()\` (which renders cleanly inline instead of block-wide).
 

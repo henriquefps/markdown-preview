@@ -474,6 +474,23 @@
 
 
 
+/* ==highlight== marks (remark-flexible-markers). A translucent amber over the
+   current background instead of the browser's opaque #ff0 default, so it
+   reads as "highlighter" in every theme (including Dark/Cyberpunk) without
+   fighting the text color. */
+.markdown-body mark {
+  background-color: rgba(250, 204, 21, 0.4);
+  color: inherit;
+  border-radius: 0.2em;
+  padding: 0.05em 0.2em;
+}
+
+/* Superscript/subscript (remark-supersub) shouldn't inflate line-height */
+.markdown-body sup,
+.markdown-body sub {
+  line-height: 0;
+}
+
 /* Image Embeds */
 .markdown-body img {
   max-width: 100%;

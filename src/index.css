@@ -300,6 +300,7 @@ body {
   blockquote,
   .markdown-body table tr,
   .mermaid-container,
+  .katex-display,
   img {
     page-break-inside: avoid;
   }

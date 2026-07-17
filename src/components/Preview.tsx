@@ -1,8 +1,13 @@
 import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import remarkEmoji from 'remark-emoji';
+import remarkSupersub from 'remark-supersub';
+import remarkFlexibleMarkers from 'remark-flexible-markers';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import rehypeKatex from 'rehype-katex';
 import { MermaidRenderer } from './MermaidRenderer';
 import { Copy, Check } from 'lucide-react';
 
@@ -16,12 +21,16 @@ interface PreviewProps {
   hidden?: boolean;
 }
 
-// Custom schema for rehype-sanitize to allow inline base64 images
+// Custom schema for rehype-sanitize to allow inline base64 images and the
+// <mark> element (remark-flexible-markers' ==highlight== output isn't in the
+// default GitHub-style allow-list, unlike <sup>/<sub> which already are)
 const sanitizeSchema = {
   ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames || []), 'mark'],
   attributes: {
     ...defaultSchema.attributes,
-    img: [...(defaultSchema.attributes?.img || []), ['src', 'alt', 'title']]
+    img: [...(defaultSchema.attributes?.img || []), ['src', 'alt', 'title']],
+    mark: [...(defaultSchema.attributes?.mark || []), 'className']
   },
   protocols: {
     ...defaultSchema.protocols,
@@ -100,8 +109,8 @@ export const Preview: React.FC<PreviewProps> = ({
               <tr>
                 <td>
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+                    remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkMath, remarkEmoji, remarkSupersub, remarkFlexibleMarkers]}
+                    rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
                     components={{
                       code: CodeBlockComponent,
                       pre: PreComponent,
