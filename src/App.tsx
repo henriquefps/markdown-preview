@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
-import { 
+import {
   FileText, Download, Moon, Sun, Link2, Link2Off, Settings,
-  Plus, Trash2, Edit2, Search, Menu, X
+  Plus, Trash2, Edit2, Search, Menu, X, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
+import { syncNotes, type SyncNote } from './lib/sync';
 import './components/MarkdownViewer.css';
 
 const SAMPLE_MARKDOWN = `# Markdown Previewer Showcase 🚀
@@ -87,7 +88,55 @@ interface MarkdownFile {
   title: string;
   content: string;
   updatedAt: number;
+  // False/undefined = title tracks the first line of content automatically.
+  // True once the user explicitly renames the file, which locks it.
+  titleIsCustom?: boolean;
+  // Soft-delete tombstone: kept (not spliced out) so a delete can propagate
+  // to other synced devices instead of silently resurrecting on next sync.
+  deleted?: boolean;
 }
+
+// Used for files whose title hasn't been manually set: mirrors the first
+// non-empty line of the document, stripped of heading/list/quote markers.
+const deriveTitleFromContent = (content: string): string => {
+  const firstLine = content.split('\n').find((line) => line.trim().length > 0) || '';
+  const cleaned = firstLine.replace(/^#{1,6}\s+/, '').replace(/^[-*>]\s+/, '').trim();
+  if (!cleaned) return 'Untitled.md';
+  const truncated = cleaned.length > 50 ? `${cleaned.slice(0, 50).trimEnd()}…` : cleaned;
+  return `${truncated}.md`;
+};
+
+// Reconciles the sync server's authoritative (already last-write-wins merged)
+// note list into local files: newer remote revisions overwrite local ones,
+// brand new remote notes get added, and each file's local-only titleIsCustom
+// flag (never sent to the server) is preserved.
+const applyServerNotes = (localFiles: MarkdownFile[], serverNotes: SyncNote[]): MarkdownFile[] => {
+  const byId = new Map(localFiles.map((f) => [f.id, f]));
+  for (const remote of serverNotes) {
+    const local = byId.get(remote.id);
+    if (!local || remote.updatedAt > local.updatedAt) {
+      byId.set(remote.id, {
+        id: remote.id,
+        title: remote.title,
+        content: remote.content,
+        updatedAt: remote.updatedAt,
+        deleted: remote.deleted,
+        titleIsCustom: local?.titleIsCustom
+      });
+    }
+  }
+  return Array.from(byId.values());
+};
+
+const formatRelativeTime = (timestamp: number): string => {
+  const diffSec = Math.round((Date.now() - timestamp) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.round(diffMin / 60);
+  return `${diffHour}h ago`;
+};
 
 function App() {
   const [files, setFiles] = useState<MarkdownFile[]>(() => {
@@ -192,6 +241,88 @@ function App() {
     localStorage.setItem('preview-margin', margin);
   }, [margin]);
 
+  // Device Sync (local sync server)
+  const [syncEnabled, setSyncEnabled] = useState(() => localStorage.getItem('sync-enabled') === 'true');
+  const [syncServerUrl, setSyncServerUrl] = useState(() => localStorage.getItem('sync-server-url') || '');
+  const [syncApiKey, setSyncApiKey] = useState(() => localStorage.getItem('sync-api-key') || '');
+  const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('sync-enabled', String(syncEnabled));
+  }, [syncEnabled]);
+  useEffect(() => {
+    localStorage.setItem('sync-server-url', syncServerUrl);
+  }, [syncServerUrl]);
+  useEffect(() => {
+    localStorage.setItem('sync-api-key', syncApiKey);
+  }, [syncApiKey]);
+
+  // Always-current snapshot of files for the sync loop to read, so the
+  // periodic interval/focus listener don't need `files` as a dependency
+  // (which would tear down and recreate the timer on every keystroke).
+  const filesRef = useRef<MarkdownFile[]>(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const runSync = useCallback(async () => {
+    const url = syncServerUrl.trim();
+    if (!syncEnabled || !url) return;
+    setSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const payload: SyncNote[] = filesRef.current.map((f) => ({
+        id: f.id,
+        title: f.title,
+        content: f.content,
+        updatedAt: f.updatedAt,
+        deleted: f.deleted === true
+      }));
+      const serverNotes = await syncNotes(url, payload, syncApiKey);
+      const merged = applyServerNotes(filesRef.current, serverNotes);
+      setFiles(merged);
+      setActiveFileId((prevId) => {
+        const stillValid = merged.find((f) => f.id === prevId && !f.deleted);
+        if (stillValid) return prevId;
+        const fallback = merged.find((f) => !f.deleted);
+        return fallback ? fallback.id : prevId;
+      });
+      setSyncStatus('success');
+      setLastSyncedAt(Date.now());
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncError(err instanceof Error ? err.message : 'Sync failed.');
+    }
+  }, [syncEnabled, syncServerUrl, syncApiKey]);
+
+  // Periodic sync + sync when the tab regains focus (e.g. switching back
+  // from another device's edits taking effect while this one was idle).
+  useEffect(() => {
+    if (!syncEnabled || !syncServerUrl.trim()) return;
+    // Deferred via setTimeout(0): runSync's first line is a setState call,
+    // and calling that synchronously inside the effect body (rather than
+    // from a callback/timer) trips react-hooks/set-state-in-effect.
+    const kickoff = setTimeout(runSync, 0);
+    const interval = setInterval(runSync, 15000);
+    window.addEventListener('focus', runSync);
+    return () => {
+      clearTimeout(kickoff);
+      clearInterval(interval);
+      window.removeEventListener('focus', runSync);
+    };
+  }, [syncEnabled, syncServerUrl, runSync]);
+
+  // Push local edits shortly after the user stops typing, instead of only on
+  // the next periodic tick.
+  useEffect(() => {
+    if (!syncEnabled || !syncServerUrl.trim()) return;
+    const timeout = setTimeout(runSync, 3000);
+    return () => clearTimeout(timeout);
+  }, [files, syncEnabled, syncServerUrl, runSync]);
+
   // Scroll Sync Refs
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
@@ -211,15 +342,20 @@ function App() {
     document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  const activeFile = files.find(f => f.id === activeFileId) || files[0] || { id: '', title: '', content: '' };
+  const activeFile = files.find(f => f.id === activeFileId && !f.deleted)
+    || files.find(f => !f.deleted)
+    || files[0]
+    || { id: '', title: '', content: '', updatedAt: 0 };
   const markdown = activeFile.content;
 
   const setMarkdown = (newContent: string) => {
     setFiles(prev => prev.map(f => {
-      if (f.id === activeFileId) {
+      if (f.id !== activeFileId) return f;
+      const shouldAutoTitle = f.titleIsCustom === false || f.title === 'Untitled.md';
+      if (!shouldAutoTitle) {
         return { ...f, content: newContent, updatedAt: Date.now() };
       }
-      return f;
+      return { ...f, content: newContent, title: deriveTitleFromContent(newContent), titleIsCustom: false, updatedAt: Date.now() };
     }));
   };
 
@@ -277,7 +413,8 @@ function App() {
       id: newId,
       title: 'Untitled.md',
       content: '# Untitled\n\nStart writing here...',
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      titleIsCustom: false
     };
     setFiles(prev => [newFile, ...prev]);
     setActiveFileId(newId);
@@ -290,28 +427,34 @@ function App() {
 
   const handleDeleteFile = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const fileToDelete = files.find(f => f.id === id);
+    const fileToDelete = files.find(f => f.id === id && !f.deleted);
     if (!fileToDelete) return;
-    if (window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) {
-      const remainingFiles = files.filter(f => f.id !== id);
-      if (remainingFiles.length === 0) {
-        const defaultFile: MarkdownFile = {
-          id: 'default',
-          title: 'Showcase.md',
-          content: SAMPLE_MARKDOWN,
-          updatedAt: Date.now()
-        };
-        setFiles([defaultFile]);
-        setActiveFileId('default');
-      } else {
-        setFiles(remainingFiles);
-        if (activeFileId === id) {
-          setActiveFileId(remainingFiles[0].id);
-        }
+    if (!window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) return;
+
+    // Soft delete: keep a tombstone instead of splicing the record out, so
+    // the deletion can propagate to other synced devices instead of the
+    // file silently reappearing next time they sync (they'd otherwise see
+    // it as "a note that exists elsewhere but not here" and pull it back).
+    const remainingVisible = files.filter(f => f.id !== id && !f.deleted);
+    const tombstoned = files.map(f => (f.id === id ? { ...f, deleted: true, updatedAt: Date.now() } : f));
+
+    if (remainingVisible.length === 0) {
+      const fallbackFile: MarkdownFile = {
+        id: `file_${Date.now()}`,
+        title: 'Showcase.md',
+        content: SAMPLE_MARKDOWN,
+        updatedAt: Date.now()
+      };
+      setFiles([...tombstoned, fallbackFile]);
+      setActiveFileId(fallbackFile.id);
+    } else {
+      setFiles(tombstoned);
+      if (activeFileId === id) {
+        setActiveFileId(remainingVisible[0].id);
       }
-      if (editingFileId === id) {
-        setEditingFileId(null);
-      }
+    }
+    if (editingFileId === id) {
+      setEditingFileId(null);
     }
   };
 
@@ -327,10 +470,14 @@ function App() {
       return;
     }
     setFiles(prev => prev.map(f => {
-      if (f.id === id) {
-        return { ...f, title: editingTitle.trim(), updatedAt: Date.now() };
-      }
-      return f;
+      if (f.id !== id) return f;
+      const trimmed = editingTitle.trim();
+      // The rename field auto-focuses right after "New File", so a blur with
+      // no actual edit (e.g. the user just clicks into the editor to start
+      // typing) must not lock the title — that would permanently disable
+      // auto-titling from the first line for every newly created file.
+      if (trimmed === f.title) return f;
+      return { ...f, title: trimmed, titleIsCustom: true, updatedAt: Date.now() };
     }));
     setEditingFileId(null);
   };
@@ -371,9 +518,9 @@ function App() {
     }
   };
 
-  const filteredFiles = files.filter(f => 
-    f.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter(f => !f.deleted && f.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
     <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
@@ -423,7 +570,11 @@ function App() {
           <div className="theme-selector">
             <button
               className="theme-btn"
-              onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+              onClick={() => {
+                setIsThemeDropdownOpen(!isThemeDropdownOpen);
+                setIsSettingsOpen(false);
+                setIsSyncSettingsOpen(false);
+              }}
               title="Change theme"
             >
               {theme === 'light' ? <Sun size={16} /> : <Moon size={16} />}
@@ -465,6 +616,7 @@ function App() {
               onClick={() => {
                 setIsSettingsOpen(!isSettingsOpen);
                 setIsThemeDropdownOpen(false);
+                setIsSyncSettingsOpen(false);
               }}
               title="Preview / PDF Export Options"
             >
@@ -526,6 +678,93 @@ function App() {
                     <option value="2rem">Standard (2rem)</option>
                     <option value="3.5rem">Wide (3.5rem)</option>
                   </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Device Sync Menu Dropdown */}
+          <div className="settings-menu">
+            <button
+              className={`theme-btn ${isSyncSettingsOpen ? 'active' : ''}`}
+              onClick={() => {
+                setIsSyncSettingsOpen(!isSyncSettingsOpen);
+                setIsThemeDropdownOpen(false);
+                setIsSettingsOpen(false);
+              }}
+              title="Device Sync Settings"
+            >
+              {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
+              <span>Sync</span>
+            </button>
+
+            {isSyncSettingsOpen && (
+              <div className="settings-dropdown">
+                <div className="settings-group">
+                  <button
+                    className={`action-btn-secondary sync-toggle-btn ${syncEnabled ? 'active' : ''}`}
+                    onClick={() => setSyncEnabled(!syncEnabled)}
+                    style={{
+                      borderColor: syncEnabled ? 'var(--accent)' : 'var(--border-color)',
+                      color: syncEnabled ? 'var(--accent)' : 'var(--text-secondary)',
+                      backgroundColor: syncEnabled ? 'var(--accent-light)' : 'var(--bg-primary)'
+                    }}
+                  >
+                    {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
+                    <span>{syncEnabled ? 'Device sync enabled' : 'Enable device sync'}</span>
+                  </button>
+                </div>
+
+                <div className="settings-group">
+                  <span className="settings-label">Sync Server Address</span>
+                  <input
+                    key={isSyncSettingsOpen ? 'open' : 'closed'}
+                    type="text"
+                    className="settings-select"
+                    placeholder="http://192.168.1.xx:3041"
+                    defaultValue={syncServerUrl}
+                    onBlur={(e) => setSyncServerUrl(e.target.value.trim())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="settings-group">
+                  <span className="settings-label">API Key (only if your server requires one)</span>
+                  <input
+                    key={isSyncSettingsOpen ? 'open-key' : 'closed-key'}
+                    type="password"
+                    className="settings-select"
+                    placeholder="Leave empty for a plain LAN-only server"
+                    defaultValue={syncApiKey}
+                    onBlur={(e) => setSyncApiKey(e.target.value.trim())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="settings-group">
+                  <button
+                    className="action-btn-secondary"
+                    onClick={runSync}
+                    disabled={!syncEnabled || !syncServerUrl.trim() || syncStatus === 'syncing'}
+                  >
+                    <RefreshCw size={14} className={syncStatus === 'syncing' ? 'spin' : ''} />
+                    <span>Sync Now</span>
+                  </button>
+                  <span className="settings-label" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
+                    {syncStatus === 'syncing' && 'Syncing…'}
+                    {syncStatus === 'success' && lastSyncedAt && `Last synced ${formatRelativeTime(lastSyncedAt)}`}
+                    {syncStatus === 'error' && syncError && `Error: ${syncError}`}
+                    {syncStatus === 'idle' && !syncServerUrl.trim() && 'Enter a server address to start syncing.'}
+                    {syncStatus === 'idle' && syncServerUrl.trim() && !syncEnabled && 'Sync is off.'}
+                  </span>
                 </div>
               </div>
             )}

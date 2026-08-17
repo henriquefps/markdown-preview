@@ -255,6 +255,109 @@
   margin: 0 0.25rem;
 }
 
+/* Find & Replace Bar */
+.find-replace-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.find-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.find-replace-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.find-replace-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.find-replace-input:focus {
+  border-color: var(--accent);
+}
+
+.find-replace-counter {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  min-width: 4.5rem;
+  text-align: center;
+}
+
+.find-replace-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.find-replace-icon-btn:hover:not(:disabled) {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.find-replace-icon-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background-color: var(--accent-light);
+}
+
+.find-replace-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.find-replace-text-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.find-replace-text-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.find-replace-text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Editor Input Wrapper */
 .editor-container {
   display: flex;
@@ -284,6 +387,12 @@
   border-right: 1px solid var(--border-color);
   min-width: 3rem;
   text-align: right;
+  /* Without a scroll container of its own, setting .scrollTop here (on every
+     textarea scroll, including jumping to a Find match) was silently a
+     no-op, leaving the gutter frozen at the top while the text scrolled
+     underneath it. `hidden` lets JS drive scrollTop without adding its own
+     independently-scrollable UI. */
+  overflow-y: hidden;
 }
 
 .editor-textarea {
@@ -330,6 +439,20 @@
   to {
     opacity: 1;
   }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
 }
 
 .dropzone-text {
@@ -581,8 +704,15 @@
   .editor-textarea,
   .line-numbers,
   .sidebar-search input,
-  .file-rename-input {
+  .file-rename-input,
+  .find-replace-input {
     font-size: 16px;
+  }
+
+  /* Give the find/replace row breathing room on narrow screens instead of
+     squeezing every control onto one line. */
+  .find-replace-row {
+    flex-wrap: wrap;
   }
 
   /* Responsive Header for Mobile */
