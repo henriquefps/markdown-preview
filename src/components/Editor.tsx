@@ -443,7 +443,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
         {isDragOver && (
           <div className="dropzone-overlay">
             <Image size={48} className="animate-bounce" />
-            <div className="dropzone-text">Solte a imagem aqui para incorporá-la</div>
+            <div className="dropzone-text">Drop the image here to embed it</div>
           </div>
         )}
 

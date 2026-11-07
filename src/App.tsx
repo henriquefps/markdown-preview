@@ -577,7 +577,7 @@ function App() {
           <button 
             className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            title={isSidebarOpen ? "Fechar painel lateral" : "Abrir painel lateral"}
+            title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
           >
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -592,21 +592,21 @@ function App() {
           <button
             className={activeTab === 'editor' ? 'active' : ''}
             onClick={() => setActiveTab('editor')}
-            title="Mostrar apenas o Editor"
+            title="Show editor only"
           >
             Editor
           </button>
           <button
             className={`desktop-only ${activeTab === 'split' ? 'active' : ''}`}
             onClick={() => setActiveTab('split')}
-            title="Mostrar Split (Editor + Preview)"
+            title="Show split view (editor + preview)"
           >
             Split
           </button>
           <button
             className={activeTab === 'preview' ? 'active' : ''}
             onClick={() => setActiveTab('preview')}
-            title="Mostrar apenas o Preview"
+            title="Show preview only"
           >
             Preview
           </button>
@@ -822,7 +822,7 @@ function App() {
             <button
               className={`action-btn-secondary ${isSyncScrollEnabled ? 'active' : ''}`}
               onClick={() => setIsSyncScrollEnabled(!isSyncScrollEnabled)}
-              title={isSyncScrollEnabled ? "Desativar Scroll Sincronizado" : "Ativar Scroll Sincronizado"}
+              title={isSyncScrollEnabled ? "Disable synchronized scrolling" : "Enable synchronized scrolling"}
               style={{
                 borderColor: isSyncScrollEnabled ? 'var(--accent)' : 'var(--border-color)',
                 color: isSyncScrollEnabled ? 'var(--accent)' : 'var(--text-secondary)',
@@ -860,12 +860,12 @@ function App() {
             <Search size={16} className="search-icon" />
             <input
               type="text"
-              placeholder="Pesquisar arquivos..."
+              placeholder="Search files..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
-              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Limpar pesquisa">
+              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Clear search">
                 <X size={14} />
               </button>
             )}
@@ -910,7 +910,7 @@ function App() {
                       <button
                         className="file-action-btn"
                         onClick={(e) => handleStartRename(file.id, file.title, e)}
-                        title="Renomear"
+                        title="Rename"
                       >
                         <Edit2 size={14} />
                       </button>
@@ -918,7 +918,7 @@ function App() {
                     <button
                       className="file-action-btn delete"
                       onClick={(e) => handleDeleteFile(file.id, e)}
-                      title="Excluir"
+                      title="Delete"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -927,7 +927,7 @@ function App() {
               );
             })}
             {filteredFiles.length === 0 && (
-              <div className="empty-search">Nenhum arquivo encontrado</div>
+              <div className="empty-search">No files found</div>
             )}
           </div>
         </aside>
