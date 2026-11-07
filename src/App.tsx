@@ -129,6 +129,16 @@ const applyServerNotes = (localFiles: MarkdownFile[], serverNotes: SyncNote[]): 
   return Array.from(byId.values());
 };
 
+// A note's title follows its first line unless the user renamed it. Notes that
+// arrive from the sync server (or legacy data) have no `titleIsCustom` flag, so
+// treat them as auto-titled when the title is the placeholder or matches what
+// auto-titling would have produced for the current content.
+const isAutoTitled = (f: MarkdownFile): boolean => {
+  if (f.titleIsCustom === false) return true;
+  if (f.titleIsCustom === true) return false;
+  return f.title === 'Untitled.md' || f.title === deriveTitleFromContent(f.content);
+};
+
 const formatRelativeTime = (timestamp: number): string => {
   const diffSec = Math.round((Date.now() - timestamp) / 1000);
   if (diffSec < 5) return 'just now';
@@ -175,10 +185,10 @@ function App() {
 
   const [activeFileId, setActiveFileId] = useState<string>(() => {
     const savedActive = safeGetItem('active-file-id');
-    if (savedActive && files.some(f => f.id === savedActive)) {
+    if (savedActive && files.some(f => f.id === savedActive && !f.deleted)) {
       return savedActive;
     }
-    return files[0]?.id || 'default';
+    return (files.find(f => !f.deleted) ?? files[0])?.id || 'default';
   });
 
   const storageWriteFailed = useSyncExternalStore(subscribeStorageStatus, getStorageWriteFailed);
@@ -364,10 +374,12 @@ function App() {
   const markdown = activeFile.content;
 
   const setMarkdown = (newContent: string) => {
+    // Edit the note that is actually rendered (activeFile), not the raw id,
+    // which may point at a deleted/missing note.
+    const targetId = activeFile.id;
     setFiles(prev => prev.map(f => {
-      if (f.id !== activeFileId) return f;
-      const shouldAutoTitle = f.titleIsCustom === false || f.title === 'Untitled.md';
-      if (!shouldAutoTitle) {
+      if (f.id !== targetId) return f;
+      if (!isAutoTitled(f)) {
         return { ...f, content: newContent, updatedAt: Date.now() };
       }
       return { ...f, content: newContent, title: deriveTitleFromContent(newContent), titleIsCustom: false, updatedAt: Date.now() };
@@ -464,7 +476,7 @@ function App() {
       setActiveFileId(fallbackFile.id);
     } else {
       setFiles(tombstoned);
-      if (activeFileId === id) {
+      if (activeFile.id === id) {
         setActiveFileId(remainingVisible[0].id);
       }
     }
