@@ -108,7 +108,7 @@ const PreviewComponent: React.FC<PreviewProps> = ({
       className={cn('print-flow flex h-full min-h-0 min-w-0 flex-col', hidden && 'pane-hidden')}
     >
       <div
-        className="print-flow min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8"
+        className="print-flow min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 md:px-8"
         ref={previewContainerRef}
         style={{
           '--preview-font-family': fontFamily,

@@ -579,7 +579,7 @@ function App() {
 
   return (
     <div className="print-flow [--header-height:--spacing(14)]">
-      <SidebarProvider open={isSidebarOpen} onOpenChange={setIsSidebarOpen} className="print-flow flex-col">
+      <SidebarProvider open={isSidebarOpen} onOpenChange={setIsSidebarOpen} className="print-flow h-dvh min-h-0 flex-col overflow-hidden print:h-auto">
         <TopBar
           isMobile={isMobile}
           view={activeTab}
@@ -592,7 +592,7 @@ function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           onExport={triggerPrint}
         />
-        <div className="print-flow flex h-[calc(100svh-var(--header-height))] min-h-0">
+        <div className="print-flow flex min-h-0 flex-1">
           <MobileAwareSidebar
             files={filteredFiles}
             activeId={activeFile.id}

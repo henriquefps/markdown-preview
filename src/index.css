@@ -192,7 +192,22 @@
   body {
     @apply bg-background text-foreground antialiased;
     margin: 0;
-    min-height: 100vh;
+  }
+
+  /* The app shell is exactly the dynamic viewport; only inner panes scroll (screen only,
+     print must flow across pages). */
+  @media screen {
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+    textarea,
+    .line-numbers,
+    [data-slot="sidebar-content"] {
+      overscroll-behavior: contain;
+    }
   }
 
   button:not(:disabled),

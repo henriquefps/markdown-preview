@@ -188,6 +188,12 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
     });
     lineTopsRef.current = tops;
     mirror.replaceChildren();
+    // Make the gutter's scrollable height equal the textarea's (incl. bottom padding and any
+    // rounding), so it can never stop short of or drift from the textarea at the scroll end.
+    const gutterPadTop = parseFloat(getComputedStyle(gutter).paddingTop) || 0;
+    gutter.style.paddingBottom = '0px';
+    const needed = textarea.scrollHeight - gutterPadTop - top;
+    gutter.style.paddingBottom = `${Math.max(needed, parseFloat(cs.paddingBottom) || 0)}px`;
     gutter.scrollTop = textarea.scrollTop;
   }, [textareaRef]);
 
@@ -687,7 +693,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
         <div
           ref={lineNumbersRef}
           aria-hidden
-          className="line-numbers w-12 shrink-0 overflow-hidden border-r py-4 pr-2 text-right font-mono text-[0.8125rem] leading-6 text-muted-foreground tabular-nums select-none"
+          className="line-numbers w-12 shrink-0 overflow-hidden border-r pt-4 pr-2 text-right font-mono text-[0.8125rem] leading-6 text-muted-foreground tabular-nums select-none"
         >
           {Array.from({ length: lineCount }, (_, i) => (
             <div key={i}>{i + 1}</div>
