@@ -274,38 +274,63 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
     insertText('\n' + prefix, '', `Heading ${level}`);
   };
 
-  // Handle Drag & Drop of Images
-  const handleDragOver = (e: React.DragEvent) => {
+  // Handle Drag & Drop of Images. dragenter/dragleave also fire for every child
+  // element the cursor crosses, so count them instead of toggling on each event.
+  const dragDepthRef = useRef(0);
+
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
+    dragDepthRef.current += 1;
     setIsDragOver(true);
   };
 
-  const handleDragLeave = () => {
-    setIsDragOver(false);
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
   };
 
-  const processFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragOver(false);
+  };
+
+  const readAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  // Embeds every image in `files` with a single insertion, so concurrent
+  // FileReader callbacks can't overwrite each other.
+  const processFiles = async (files: File[]) => {
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) {
       alert('Only images can be embedded directly.');
       return;
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        const base64Url = event.target.result as string;
-        insertText(`\n![${file.name}](`, ')\n', base64Url);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const urls = await Promise.all(images.map(readAsDataUrl));
+      const markdown = images.map((file, i) => `\n![${file.name}](${urls[i]})\n`).join('');
+      insertText(markdown);
+    } catch (err) {
+      console.error('Failed to read image', err);
+      alert('Could not read one of the images.');
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    dragDepthRef.current = 0;
     setIsDragOver(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
+      void processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -313,7 +338,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (e.clipboardData.files && e.clipboardData.files.length > 0) {
       e.preventDefault();
-      processFile(e.clipboardData.files[0]);
+      void processFiles(Array.from(e.clipboardData.files));
     }
   };
 
@@ -410,6 +435,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
       {/* Editor Main Area */}
       <div 
         className="editor-container"
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
