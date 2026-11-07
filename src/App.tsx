@@ -271,9 +271,15 @@ function App() {
     filesRef.current = files;
   }, [files]);
 
+  const syncInFlightRef = useRef(false);
+
   const runSync = useCallback(async () => {
     const url = syncServerUrl.trim();
     if (!syncEnabled || !url) return;
+    // In-flight guard: interval, window focus and the debounce can all fire
+    // runSync; never run overlapping requests.
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
     setSyncStatus('syncing');
     setSyncError(null);
     try {
@@ -285,29 +291,25 @@ function App() {
         deleted: f.deleted === true
       }));
       const serverNotes = await syncNotes(url, payload, syncApiKey);
-      const merged = applyServerNotes(filesRef.current, serverNotes);
-      // applyServerNotes reuses the same object reference for any note that
-      // didn't actually change, but Array.from() always returns a brand new
-      // array — so without this check, every sync tick (even a total no-op
-      // one) would replace `files` wholesale and re-render the whole app,
-      // which is enough to disturb an in-progress text selection in the
-      // preview pane even though nothing on screen actually changed.
-      const unchanged = merged.length === filesRef.current.length
-        && merged.every((f, i) => f === filesRef.current[i]);
-      if (!unchanged) {
-        setFiles(merged);
-        setActiveFileId((prevId) => {
-          const stillValid = merged.find((f) => f.id === prevId && !f.deleted);
-          if (stillValid) return prevId;
-          const fallback = merged.find((f) => !f.deleted);
-          return fallback ? fallback.id : prevId;
-        });
-      }
+      // Apply with a functional update so edits typed while the request was in
+      // flight are merged with, rather than overwritten by, a stale snapshot.
+      // applyServerNotes reuses object references for unchanged notes; return
+      // `prev` untouched when nothing changed so no-op sync ticks don't
+      // re-render the app (which would disturb preview text selection).
+      setFiles((prev) => {
+        const merged = applyServerNotes(prev, serverNotes);
+        const unchanged = merged.length === prev.length && merged.every((f, i) => f === prev[i]);
+        return unchanged ? prev : merged;
+      });
+      // No active-id fix-up needed: `activeFile` below falls back to the first
+      // visible note when the stored id points at a deleted/missing one.
       setSyncStatus('success');
       setLastSyncedAt(Date.now());
     } catch (err) {
       setSyncStatus('error');
       setSyncError(err instanceof Error ? err.message : 'Sync failed.');
+    } finally {
+      syncInFlightRef.current = false;
     }
   }, [syncEnabled, syncServerUrl, syncApiKey]);
 
@@ -848,7 +850,7 @@ function App() {
 
           <div className="file-list">
             {filteredFiles.map((file) => {
-              const isActive = file.id === activeFileId;
+              const isActive = file.id === activeFile.id;
               const isEditing = file.id === editingFileId;
 
               return (
