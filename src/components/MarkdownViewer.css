@@ -321,6 +321,19 @@
     display: none !important;
   }
 
+  /* Floating layers (menus, tooltips, popovers, sheets, dialogs, toasts) never print. */
+  [data-radix-popper-content-wrapper],
+  [data-slot$="-content"]:not(.markdown-body),
+  [data-slot$="-overlay"],
+  [role="menu"],
+  [role="tooltip"],
+  [role="listbox"],
+  [role="dialog"],
+  [role="alertdialog"],
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+
   /* Unwrap every app container around the preview so the document flows across pages. */
   #root,
   .print-flow,
