@@ -1,13 +1,21 @@
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
-import { Editor } from './components/Editor';
-import { Preview } from './components/Preview';
-import {
-  FileText, Download, Moon, Sun, Link2, Link2Off, Settings,
-  Plus, Trash2, Edit2, Search, Menu, X, Cloud, CloudOff, RefreshCw
-} from 'lucide-react';
-import { syncNotes, type SyncNote } from './lib/sync';
-import { useDismiss } from './hooks/useDismiss';
-import { safeGetItem, safeSetItem, subscribeStorageStatus, getStorageWriteFailed } from './lib/storage';
+import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, type ComponentProps } from 'react';
+import { WarningIcon } from '@phosphor-icons/react';
+import { useDefaultLayout } from 'react-resizable-panels';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
+import { Toaster } from '@/components/ui/sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { ConfirmDialog, type ConfirmRequest } from '@/components/ConfirmDialog';
+import { Editor } from '@/components/Editor';
+import { FileSidebar } from '@/components/FileSidebar';
+import { Preview } from '@/components/Preview';
+import { PreviewSettingsSheet, SyncSettingsSheet, type PreviewSettings } from '@/components/SettingsSheets';
+import { TopBar, type SyncIndicator, type ViewMode } from '@/components/TopBar';
+import { syncNotes, type SyncNote } from '@/lib/sync';
+import { safeGetItem, safeSetItem, subscribeStorageStatus, getStorageWriteFailed } from '@/lib/storage';
+import { relativeTime } from '@/lib/time';
+import { cn } from '@/lib/utils';
 import './components/MarkdownViewer.css';
 
 const SAMPLE_MARKDOWN = `# Markdown Previewer Showcase 🚀
@@ -20,7 +28,7 @@ Created by [Henrique Silva](https://hfps.dev) using React and Vite.
 
 ## 🎨 Rich Features
 - **Split-Pane Layout** with synchronized scrolling & mobile responsiveness.
-- **Multiple Themes**: Quick toggle between Light (default), Dark, Sepia, and Cyberpunk.
+- **Themes & Palettes**: Light, Dark or System, plus Olive, Blue, Violet, Rose and Graphite color palettes.
 - **Settings & Customization**: Configure your preferred font family, font size, line spacing, and margins. These settings will automatically apply to both your live preview and the exported PDF!
 - **Drag & Drop / Paste Images**: Drop any image file directly onto the editor or paste from clipboard to instantly embed as a Base64 URI.
 - **High-Fidelity PDF Export**: Use the **Export PDF** button to print or save your document as a beautifully formatted PDF (forced to clean Light mode automatically).
@@ -64,14 +72,12 @@ console.log("Fibonacci(10):", fibonacci(10));
 \`\`\`mermaid
 graph TD
     A[Write Markdown] --> B{Choose Theme}
-    B -->|Light| C[Clean White]
+    B -->|Light| C[Clean Light]
     B -->|Dark| D[Elegant Dark]
-    B -->|Sepia| E[Warm Sepia]
-    B -->|Cyberpunk| F[Neon Cyberpunk]
+    B -->|System| E[Follows your OS]
     C --> G[Export PDF]
     D --> G
     E --> G
-    F --> G
 \`\`\`
 
 ### 📝 Task List
@@ -82,8 +88,6 @@ graph TD
 - [x] Deploy to Cloudflare Pages!
 
 `;
-
-type Theme = 'light' | 'dark' | 'sepia' | 'cyberpunk';
 
 interface MarkdownFile {
   id: string;
@@ -140,15 +144,18 @@ const isAutoTitled = (f: MarkdownFile): boolean => {
   return f.title === 'Untitled.md' || f.title === deriveTitleFromContent(f.content);
 };
 
-const formatRelativeTime = (timestamp: number): string => {
-  const diffSec = Math.round((Date.now() - timestamp) / 1000);
-  if (diffSec < 5) return 'just now';
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHour = Math.round(diffMin / 60);
-  return `${diffHour}h ago`;
+// Below md the split view does not fit; it falls back to the editor.
+const isNarrowViewport = () => window.innerWidth < 768;
+
+// Persists the split sizes through the guarded storage helpers.
+const layoutStorage = {
+  getItem: (key: string) => safeGetItem(key),
+  setItem: (key: string, value: string) => {
+    safeSetItem(key, value);
+  },
 };
+
+type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
 function App() {
   const [files, setFiles] = useState<MarkdownFile[]>(() => {
@@ -193,29 +200,27 @@ function App() {
   });
 
   const storageWriteFailed = useSyncExternalStore(subscribeStorageStatus, getStorageWriteFailed);
+  const isMobile = useIsMobile();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    return window.innerWidth > 768;
-  });
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = safeGetItem('theme') as Theme;
-    return ['light', 'dark', 'sepia', 'cyberpunk'].includes(saved) ? saved : 'light';
-  });
+  // Desktop file list open/closed (the phone Sheet has its own state inside SidebarProvider).
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => safeGetItem('sidebar-open') !== 'false');
+  useEffect(() => {
+    safeSetItem('sidebar-open', String(isSidebarOpen));
+  }, [isSidebarOpen]);
 
-  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'split'>(() => {
-    const saved = safeGetItem('active-tab') as 'editor' | 'preview' | 'split';
+  const [activeTab, setActiveTab] = useState<ViewMode>(() => {
+    const saved = safeGetItem('active-tab') as ViewMode;
     if (['editor', 'preview', 'split'].includes(saved)) {
-      if (window.innerWidth <= 768 && saved === 'split') {
+      if (isNarrowViewport() && saved === 'split') {
         return 'editor';
       }
       return saved;
     }
-    return window.innerWidth <= 768 ? 'editor' : 'split';
+    return isNarrowViewport() ? 'editor' : 'split';
   });
 
   const [isSyncScrollEnabled, setIsSyncScrollEnabled] = useState(true);
@@ -226,13 +231,15 @@ function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth <= 768 && activeTab === 'split') {
+      if (isNarrowViewport() && activeTab === 'split') {
         setActiveTab('editor');
       }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [activeTab]);
+
+  const splitLayout = useDefaultLayout({ id: 'mdpreview.split-layout', storage: layoutStorage });
 
   // Preview / PDF custom settings
   const [fontFamily, setFontFamily] = useState(() => safeGetItem('preview-font-family') || "'Inter', system-ui, sans-serif");
@@ -255,22 +262,23 @@ function App() {
     safeSetItem('preview-margin', margin);
   }, [margin]);
 
+  const previewSettings: PreviewSettings = useMemo(
+    () => ({ fontFamily, fontSize, lineHeight, margin }),
+    [fontFamily, fontSize, lineHeight, margin]
+  );
+  const updatePreviewSettings = (patch: Partial<PreviewSettings>) => {
+    if (patch.fontFamily !== undefined) setFontFamily(patch.fontFamily);
+    if (patch.fontSize !== undefined) setFontSize(patch.fontSize);
+    if (patch.lineHeight !== undefined) setLineHeight(patch.lineHeight);
+    if (patch.margin !== undefined) setMargin(patch.margin);
+  };
+
   // Device Sync (local sync server)
   const [syncEnabled, setSyncEnabled] = useState(() => safeGetItem('sync-enabled') === 'true');
   const [syncServerUrl, setSyncServerUrl] = useState(() => safeGetItem('sync-server-url') || '');
   const [syncApiKey, setSyncApiKey] = useState(() => safeGetItem('sync-api-key') || '');
   const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
-
-  const themeMenuRef = useRef<HTMLDivElement>(null);
-  const settingsMenuRef = useRef<HTMLDivElement>(null);
-  const syncMenuRef = useRef<HTMLDivElement>(null);
-  const closeThemeMenu = useCallback(() => setIsThemeDropdownOpen(false), []);
-  const closeSettingsMenu = useCallback(() => setIsSettingsOpen(false), []);
-  const closeSyncMenu = useCallback(() => setIsSyncSettingsOpen(false), []);
-  useDismiss(themeMenuRef, isThemeDropdownOpen, closeThemeMenu);
-  useDismiss(settingsMenuRef, isSettingsOpen, closeSettingsMenu);
-  useDismiss(syncMenuRef, isSyncSettingsOpen, closeSyncMenu);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
@@ -359,6 +367,23 @@ function App() {
     return () => clearTimeout(timeout);
   }, [files, syncEnabled, syncServerUrl, runSync]);
 
+  const syncConfigured = syncEnabled && syncServerUrl.trim().length > 0;
+  const syncIndicator: SyncIndicator = !syncConfigured
+    ? 'off'
+    : syncStatus === 'syncing'
+      ? 'syncing'
+      : syncStatus === 'error'
+        ? 'error'
+        : 'ok';
+  const syncStatusText = (() => {
+    if (!syncServerUrl.trim()) return 'Enter a server address to start syncing.';
+    if (!syncEnabled) return 'Sync is off.';
+    if (syncStatus === 'syncing') return 'Syncing…';
+    if (syncStatus === 'error') return `Error: ${syncError ?? 'Sync failed.'}`;
+    if (lastSyncedAt) return `Last synced ${relativeTime(lastSyncedAt)}.`;
+    return 'Waiting for the first sync…';
+  })();
+
   // Scroll Sync Refs
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
@@ -371,12 +396,6 @@ function App() {
   useEffect(() => {
     safeSetItem('active-file-id', activeFileId);
   }, [activeFileId]);
-
-  useEffect(() => {
-    safeSetItem('theme', theme);
-    // Apply theme class to document body
-    document.body.className = `theme-${theme}`;
-  }, [theme]);
 
   const activeFile = files.find(f => f.id === activeFileId && !f.deleted)
     || files.find(f => !f.deleted)
@@ -457,24 +476,18 @@ function App() {
     setFiles(prev => [newFile, ...prev]);
     setActiveFileId(newId);
     setEditingFileId(newId);
-    setEditingTitle('Untitled.md');
-    if (window.innerWidth <= 768) {
-      setIsSidebarOpen(false);
-    }
   };
 
-  const handleDeleteFile = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const fileToDelete = files.find(f => f.id === id && !f.deleted);
-    if (!fileToDelete) return;
-    if (!window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) return;
+  const deleteFile = (id: string) => {
+    const current = filesRef.current;
+    if (!current.some(f => f.id === id && !f.deleted)) return;
 
     // Soft delete: keep a tombstone instead of splicing the record out, so
     // the deletion can propagate to other synced devices instead of the
     // file silently reappearing next time they sync (they'd otherwise see
     // it as "a note that exists elsewhere but not here" and pull it back).
-    const remainingVisible = files.filter(f => f.id !== id && !f.deleted);
-    const tombstoned = files.map(f => (f.id === id ? { ...f, deleted: true, updatedAt: Date.now() } : f));
+    const remainingVisible = current.filter(f => f.id !== id && !f.deleted);
+    const tombstoned = current.map(f => (f.id === id ? { ...f, deleted: true, updatedAt: Date.now() } : f));
 
     if (remainingVisible.length === 0) {
       const fallbackFile: MarkdownFile = {
@@ -496,21 +509,27 @@ function App() {
     }
   };
 
-  const handleStartRename = (id: string, currentTitle: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingFileId(id);
-    setEditingTitle(currentTitle);
+  const handleRequestDelete = (id: string) => {
+    const file = files.find(f => f.id === id && !f.deleted);
+    if (!file) return;
+    setConfirm({
+      title: 'Delete this file?',
+      description: `"${file.title}" will be deleted on this device and on every synced device.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => deleteFile(id),
+    });
   };
 
-  const handleSaveRename = (id: string) => {
-    if (!editingTitle.trim()) {
+  const handleSaveRename = (id: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) {
       setEditingFileId(null);
       return;
     }
     setFiles(prev => prev.map(f => {
       if (f.id !== id) return f;
-      const trimmed = editingTitle.trim();
-      // The rename field auto-focuses right after "New File", so a blur with
+      // The rename field auto-focuses right after "New file", so a blur with
       // no actual edit (e.g. the user just clicks into the editor to start
       // typing) must not lock the title — that would permanently disable
       // auto-titling from the first line for every newly created file.
@@ -521,15 +540,22 @@ function App() {
   };
 
   const handleClear = () => {
-    if (window.confirm('Are you sure you want to clear the editor?')) {
-      setMarkdown('');
-    }
+    setConfirm({
+      title: 'Clear the editor?',
+      description: 'This removes all text from the current file.',
+      confirmLabel: 'Clear',
+      destructive: true,
+      onConfirm: () => setMarkdown(''),
+    });
   };
 
   const handleLoadSample = () => {
-    if (window.confirm('Do you want to reload the sample template? This will replace your current text.')) {
-      setMarkdown(SAMPLE_MARKDOWN);
-    }
+    setConfirm({
+      title: 'Load the sample document?',
+      description: 'The sample template replaces the text of the current file.',
+      confirmLabel: 'Load sample',
+      onConfirm: () => setMarkdown(SAMPLE_MARKDOWN),
+    });
   };
 
   const triggerPrint = async () => {
@@ -547,422 +573,131 @@ function App() {
     window.print();
   };
 
-  const getThemeName = (t: Theme) => {
-    switch (t) {
-      case 'light': return 'Light';
-      case 'dark': return 'Dark';
-      case 'sepia': return 'Sepia';
-      case 'cyberpunk': return 'Cyberpunk';
-    }
-  };
-
   const filteredFiles = files
     .filter(f => !f.deleted && f.title.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
-    <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-      {storageWriteFailed && (
-        <div
-          className="no-print"
-          role="alert"
-          style={{ padding: '6px 12px', background: '#fef3c7', color: '#92400e', fontSize: '0.85rem', borderBottom: '1px solid #f59e0b' }}
-        >
-          Browser storage is full, so your latest changes are not being saved locally. Delete large notes or pasted images to free space.
-        </div>
-      )}
-      {/* App Header */}
-      <header className="app-header no-print">
-        <div className="brand-section">
-          <button 
-            className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-          >
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <div className="brand-logo">
-            <img src="/logo.png" alt="MD Logo" style={{ width: '24px', height: '24px', borderRadius: '4px' }} />
-          </div>
-          <span className="brand-title">Markdown Previewer</span>
-        </div>
-
-        {/* View Mode Segmented Control */}
-        <div className="view-mode-selector">
-          <button
-            className={activeTab === 'editor' ? 'active' : ''}
-            onClick={() => setActiveTab('editor')}
-            title="Show editor only"
-          >
-            Editor
-          </button>
-          <button
-            className={`desktop-only ${activeTab === 'split' ? 'active' : ''}`}
-            onClick={() => setActiveTab('split')}
-            title="Show split view (editor + preview)"
-          >
-            Split
-          </button>
-          <button
-            className={activeTab === 'preview' ? 'active' : ''}
-            onClick={() => setActiveTab('preview')}
-            title="Show preview only"
-          >
-            Preview
-          </button>
-        </div>
-
-        <div className="control-section">
-          {/* Theme Selector Dropdown */}
-          <div className="theme-selector" ref={themeMenuRef}>
-            <button
-              className="theme-btn"
-              onClick={() => {
-                setIsThemeDropdownOpen(!isThemeDropdownOpen);
-                setIsSettingsOpen(false);
-                setIsSyncSettingsOpen(false);
-              }}
-              title="Change theme"
-            >
-              {theme === 'light' ? <Sun size={16} /> : <Moon size={16} />}
-              <span>Theme: {getThemeName(theme)}</span>
-            </button>
-
-            {isThemeDropdownOpen && (
-              <div className="theme-dropdown">
-                {(['light', 'dark', 'sepia', 'cyberpunk'] as Theme[]).map((t) => (
-                  <button
-                    key={t}
-                    className={`theme-option ${theme === t ? 'active' : ''}`}
-                    onClick={() => {
-                      setTheme(t);
-                      setIsThemeDropdownOpen(false);
-                    }}
-                  >
-                    <span>{getThemeName(t)}</span>
-                    <span
-                      className="theme-color-dot"
-                      style={{
-                        backgroundColor:
-                          t === 'light' ? '#ffffff' :
-                            t === 'dark' ? '#0f172a' :
-                              t === 'sepia' ? '#f4ecd8' : '#0a0a16',
-                        borderColor: t === 'light' ? '#cbd5e1' : 'transparent'
-                      }}
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Settings Menu Dropdown */}
-          <div className="settings-menu" ref={settingsMenuRef}>
-            <button
-              className={`theme-btn ${isSettingsOpen ? 'active' : ''}`}
-              onClick={() => {
-                setIsSettingsOpen(!isSettingsOpen);
-                setIsThemeDropdownOpen(false);
-                setIsSyncSettingsOpen(false);
-              }}
-              title="Preview / PDF Export Options"
-            >
-              <Settings size={16} />
-              <span>Settings</span>
-            </button>
-
-            {isSettingsOpen && (
-              <div className="settings-dropdown">
-                <div className="settings-group">
-                  <span className="settings-label">Font Family</span>
-                  <select
-                    className="settings-select"
-                    value={fontFamily}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                  >
-                    <option value="'Inter', system-ui, sans-serif">Sans-Serif (Inter)</option>
-                    <option value="Georgia, Cambria, 'Times New Roman', serif">Serif (Georgia)</option>
-                    <option value="'Fira Code', Consolas, Monaco, monospace">Monospace (Fira Code)</option>
-                  </select>
-                </div>
-
-                <div className="settings-group">
-                  <span className="settings-label">Font Size</span>
-                  <select
-                    className="settings-select"
-                    value={fontSize}
-                    onChange={(e) => setFontSize(e.target.value)}
-                  >
-                    <option value="0.875rem">Small (14px)</option>
-                    <option value="1rem">Medium (16px)</option>
-                    <option value="1.125rem">Large (18px)</option>
-                    <option value="1.25rem">Extra Large (20px)</option>
-                  </select>
-                </div>
-
-                <div className="settings-group">
-                  <span className="settings-label">Line Spacing</span>
-                  <select
-                    className="settings-select"
-                    value={lineHeight}
-                    onChange={(e) => setLineHeight(e.target.value)}
-                  >
-                    <option value="1.3">Compact (1.3)</option>
-                    <option value="1.7">Normal (1.7)</option>
-                    <option value="2.2">Double (2.2)</option>
-                  </select>
-                </div>
-
-                <div className="settings-group">
-                  <span className="settings-label">PDF Margins</span>
-                  <select
-                    className="settings-select"
-                    value={margin}
-                    onChange={(e) => setMargin(e.target.value)}
-                  >
-                    <option value="0">None</option>
-                    <option value="1rem">Compact (1rem)</option>
-                    <option value="2rem">Standard (2rem)</option>
-                    <option value="3.5rem">Wide (3.5rem)</option>
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Device Sync Menu Dropdown */}
-          <div className="settings-menu" ref={syncMenuRef}>
-            <button
-              className={`theme-btn ${isSyncSettingsOpen ? 'active' : ''}`}
-              onClick={() => {
-                setIsSyncSettingsOpen(!isSyncSettingsOpen);
-                setIsThemeDropdownOpen(false);
-                setIsSettingsOpen(false);
-              }}
-              title="Device Sync Settings"
-            >
-              {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
-              <span>Sync</span>
-            </button>
-
-            {isSyncSettingsOpen && (
-              <div className="settings-dropdown">
-                <div className="settings-group">
-                  <button
-                    className={`action-btn-secondary sync-toggle-btn ${syncEnabled ? 'active' : ''}`}
-                    onClick={() => setSyncEnabled(!syncEnabled)}
-                    style={{
-                      borderColor: syncEnabled ? 'var(--accent)' : 'var(--border-color)',
-                      color: syncEnabled ? 'var(--accent)' : 'var(--text-secondary)',
-                      backgroundColor: syncEnabled ? 'var(--accent-light)' : 'var(--bg-primary)'
-                    }}
-                  >
-                    {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
-                    <span>{syncEnabled ? 'Device sync enabled' : 'Enable device sync'}</span>
-                  </button>
-                </div>
-
-                <div className="settings-group">
-                  <span className="settings-label">Sync Server Address</span>
-                  <input
-                    key={isSyncSettingsOpen ? 'open' : 'closed'}
-                    type="text"
-                    className="settings-select"
-                    placeholder="http://192.168.1.xx:3041"
-                    defaultValue={syncServerUrl}
-                    onBlur={(e) => setSyncServerUrl(e.target.value.trim())}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="settings-group">
-                  <span className="settings-label">API Key (only if your server requires one)</span>
-                  <input
-                    key={isSyncSettingsOpen ? 'open-key' : 'closed-key'}
-                    type="password"
-                    className="settings-select"
-                    placeholder="Leave empty for a plain LAN-only server"
-                    defaultValue={syncApiKey}
-                    onBlur={(e) => setSyncApiKey(e.target.value.trim())}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="settings-group">
-                  <button
-                    className="action-btn-secondary"
-                    onClick={runSync}
-                    disabled={!syncEnabled || !syncServerUrl.trim() || syncStatus === 'syncing'}
-                  >
-                    <RefreshCw size={14} className={syncStatus === 'syncing' ? 'spin' : ''} />
-                    <span>Sync Now</span>
-                  </button>
-                  <span className="settings-label" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
-                    {syncStatus === 'syncing' && 'Syncing…'}
-                    {syncStatus === 'success' && lastSyncedAt && `Last synced ${formatRelativeTime(lastSyncedAt)}`}
-                    {syncStatus === 'error' && syncError && `Error: ${syncError}`}
-                    {syncStatus === 'idle' && !syncServerUrl.trim() && 'Enter a server address to start syncing.'}
-                    {syncStatus === 'idle' && syncServerUrl.trim() && !syncEnabled && 'Sync is off.'}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Sync Scroll Toggle Button */}
-          {activeTab === 'split' && (
-            <button
-              className={`action-btn-secondary ${isSyncScrollEnabled ? 'active' : ''}`}
-              onClick={() => setIsSyncScrollEnabled(!isSyncScrollEnabled)}
-              title={isSyncScrollEnabled ? "Disable synchronized scrolling" : "Enable synchronized scrolling"}
-              style={{
-                borderColor: isSyncScrollEnabled ? 'var(--accent)' : 'var(--border-color)',
-                color: isSyncScrollEnabled ? 'var(--accent)' : 'var(--text-secondary)',
-                backgroundColor: isSyncScrollEnabled ? 'var(--accent-light)' : 'var(--bg-primary)'
-              }}
-            >
-              {isSyncScrollEnabled ? <Link2 size={16} /> : <Link2Off size={16} />}
-              <span>Sync Scroll</span>
-            </button>
-          )}
-
-          {/* Export PDF Button */}
-          <button
-            className="action-btn"
-            onClick={triggerPrint}
-            title="Export compiled PDF / Print"
-          >
-            <Download size={16} />
-            <span>Export PDF</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="main-content-layout">
-        {/* Sidebar */}
-        <aside className="sidebar no-print">
-          <div className="sidebar-header">
-            <button className="new-file-btn" onClick={handleCreateFile}>
-              <Plus size={16} />
-              <span>New File</span>
-            </button>
-          </div>
-
-          <div className="sidebar-search">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search files..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Clear search">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          <div className="file-list">
-            {filteredFiles.map((file) => {
-              const isActive = file.id === activeFile.id;
-              const isEditing = file.id === editingFileId;
-
-              return (
-                <div
-                  key={file.id}
-                  className={`file-item ${isActive ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveFileId(file.id);
-                    if (window.innerWidth <= 768) {
-                      setIsSidebarOpen(false);
-                    }
-                  }}
-                >
-                  <FileText size={16} className="file-icon" />
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      className="file-rename-input"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={() => handleSaveRename(file.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveRename(file.id);
-                        if (e.key === 'Escape') setEditingFileId(null);
-                      }}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span className="file-title">{file.title}</span>
-                  )}
-                  <div className="file-actions">
-                    {!isEditing && (
-                      <button
-                        className="file-action-btn"
-                        onClick={(e) => handleStartRename(file.id, file.title, e)}
-                        title="Rename"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                    )}
-                    <button
-                      className="file-action-btn delete"
-                      onClick={(e) => handleDeleteFile(file.id, e)}
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {filteredFiles.length === 0 && (
-              <div className="empty-search">No files found</div>
-            )}
-          </div>
-        </aside>
-
-        {/* Editor & Previewer Workspace */}
-        <main className="workspace">
-          {/* Both panes stay mounted at all times (visibility is CSS-only, screen-scoped).
-              Exporting to PDF always prints the preview regardless of which tab is
-              active on screen, and Mermaid diagrams stay pre-rendered instead of
-              re-rendering every time the user switches tabs. */}
-          <Editor
-            value={markdown}
-            onChange={setMarkdown}
-            onClear={handleClear}
-            onLoadSample={handleLoadSample}
-            textareaRef={textareaRef}
-            hidden={activeTab === 'preview'}
+    <div className="print-flow [--header-height:--spacing(14)]">
+      <SidebarProvider open={isSidebarOpen} onOpenChange={setIsSidebarOpen} className="print-flow flex-col">
+        <TopBar
+          isMobile={isMobile}
+          view={activeTab}
+          onViewChange={setActiveTab}
+          sync={syncIndicator}
+          syncDetail={syncStatusText}
+          onOpenSync={() => setIsSyncSettingsOpen(true)}
+          syncScroll={isSyncScrollEnabled}
+          onSyncScrollChange={setIsSyncScrollEnabled}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onExport={triggerPrint}
+        />
+        <div className="print-flow flex h-[calc(100svh-var(--header-height))] min-h-0">
+          <MobileAwareSidebar
+            files={filteredFiles}
+            activeId={activeFile.id}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelect={setActiveFileId}
+            onCreate={handleCreateFile}
+            onRequestDelete={handleRequestDelete}
+            editingId={editingFileId}
+            onStartRename={setEditingFileId}
+            onRename={handleSaveRename}
+            onCancelRename={() => setEditingFileId(null)}
           />
+          <SidebarInset className="print-flow min-h-0 min-w-0 overflow-hidden bg-card md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-xs">
+            {storageWriteFailed && (
+              <div className="no-print border-b p-3">
+                <Alert variant="destructive">
+                  <WarningIcon />
+                  <AlertTitle>Changes are not being saved</AlertTitle>
+                  <AlertDescription>
+                    Browser storage is full, so your latest changes are not saved locally. Delete large notes or pasted images to free space.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+            {/* Both panes stay mounted at all times (visibility is CSS-only, screen-scoped).
+                Exporting to PDF always prints the preview regardless of which view is
+                active on screen, and Mermaid diagrams stay pre-rendered instead of
+                re-rendering every time the user switches views. A hidden panel leaves the
+                other one alone in the flex row, so it fills the surface without touching
+                the saved split sizes. */}
+            <ResizablePanelGroup
+              orientation="horizontal"
+              id="mdpreview-split"
+              defaultLayout={splitLayout.defaultLayout}
+              onLayoutChanged={splitLayout.onLayoutChanged}
+              className="print-flow min-h-0 flex-1"
+            >
+              <ResizablePanel id="editor" minSize="20%" className={cn('no-print', activeTab === 'preview' && 'pane-hidden')}>
+                <Editor
+                  value={markdown}
+                  onChange={setMarkdown}
+                  onClear={handleClear}
+                  onLoadSample={handleLoadSample}
+                  textareaRef={textareaRef}
+                />
+              </ResizablePanel>
+              <ResizableHandle withHandle className={cn('no-print', activeTab !== 'split' && 'pane-hidden')} />
+              <ResizablePanel id="preview" minSize="20%" className={cn('print-flow', activeTab === 'editor' && 'pane-hidden')}>
+                <Preview
+                  markdown={markdown}
+                  previewContainerRef={previewContainerRef}
+                  fontFamily={fontFamily}
+                  fontSize={fontSize}
+                  lineHeight={lineHeight}
+                  margin={margin}
+                />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
 
-          {activeTab === 'split' && <div className="resizer no-print" />}
-
-          <Preview
-            markdown={markdown}
-            previewContainerRef={previewContainerRef}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            lineHeight={lineHeight}
-            margin={margin}
-            hidden={activeTab === 'editor'}
-          />
-        </main>
-      </div>
+      <PreviewSettingsSheet
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        settings={previewSettings}
+        onChange={updatePreviewSettings}
+      />
+      <SyncSettingsSheet
+        open={isSyncSettingsOpen}
+        onOpenChange={setIsSyncSettingsOpen}
+        enabled={syncEnabled}
+        onEnabledChange={setSyncEnabled}
+        serverUrl={syncServerUrl}
+        onServerUrlChange={setSyncServerUrl}
+        apiKey={syncApiKey}
+        onApiKeyChange={setSyncApiKey}
+        onSyncNow={runSync}
+        syncing={syncStatus === 'syncing'}
+        statusText={syncStatusText}
+        statusTone={syncConfigured && syncStatus === 'error' ? 'error' : 'muted'}
+      />
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+      <Toaster position="bottom-center" />
     </div>
   );
 }
 
-export default App;
+// On phones the file list is a Sheet: picking or creating a file closes it.
+function MobileAwareSidebar(props: ComponentProps<typeof FileSidebar>) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  return (
+    <FileSidebar
+      {...props}
+      onSelect={(id) => {
+        props.onSelect(id);
+        if (isMobile) setOpenMobile(false);
+      }}
+      onCreate={() => {
+        props.onCreate();
+        if (isMobile) setOpenMobile(false);
+      }}
+    />
+  );
+}
 
+export default App;

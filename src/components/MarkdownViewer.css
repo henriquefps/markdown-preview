@@ -1,608 +1,215 @@
-/* Header and Navigation */
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1.5rem;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  z-index: 10;
-  transition: background-color var(--transition-speed), border-color var(--transition-speed);
-}
+/* Rendered markdown (preview pane) and the print / PDF export layout.
+   Everything else in the UI is Tailwind + shadcn tokens (src/index.css).
 
-.brand-section {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.brand-logo {
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--text-primary);
-}
-
-.control-section {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* Theme Selector */
-.theme-selector {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.theme-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-speed) ease;
-}
-
-.theme-btn:hover {
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.theme-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.5rem;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  padding: 0.5rem;
-  min-width: 150px;
-  z-index: 50;
-  animation: dropdownFade 0.2s ease;
-}
-
-@keyframes dropdownFade {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.theme-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  border-radius: 0.375rem;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.theme-option:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.theme-option.active {
-  background-color: var(--accent-light);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.theme-color-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Action Buttons */
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  background-color: var(--accent);
-  color: #ffffff;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all var(--transition-speed) ease;
-}
-
-.action-btn:hover {
-  background-color: var(--accent-hover);
-  box-shadow: var(--shadow-sm);
-}
-
-.action-btn-secondary {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all var(--transition-speed) ease;
-}
-
-.action-btn-secondary:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* Workspace Layout */
-.workspace {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-.editor-pane,
-.preview-pane {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* Screen-only: the inactive pane (Editor or Preview) is kept mounted so its
-   state/renders (e.g. Mermaid diagrams) survive tab switches, and so PDF
-   export always has preview content regardless of which tab is on screen.
-   This must never apply while printing, hence the media scoping. */
-@media screen {
-  .pane-hidden {
-    display: none !important;
-  }
-}
-
-.pane-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
-.resizer {
-  width: 4px;
-  background-color: var(--border-color);
-  cursor: col-resize;
-  transition: background-color var(--transition-speed);
-}
-
-.resizer:hover,
-.resizer:active {
-  background-color: var(--accent);
-}
-
-/* Toolbar */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem;
-  background-color: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  overflow-x: auto;
-}
-
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.25rem;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.toolbar-btn:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.toolbar-separator {
-  width: 1px;
-  height: 1.25rem;
-  background-color: var(--border-color);
-  margin: 0 0.25rem;
-}
-
-/* Find & Replace Bar */
-.find-replace-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.5rem;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.find-replace-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.find-replace-icon {
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.find-replace-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.8rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.25rem;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.find-replace-input:focus {
-  border-color: var(--accent);
-}
-
-.find-replace-counter {
-  font-size: 0.7rem;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  min-width: 4.5rem;
-  text-align: center;
-}
-
-.find-replace-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  flex-shrink: 0;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.find-replace-icon-btn:hover:not(:disabled) {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.find-replace-icon-btn.active {
-  color: var(--accent);
-  border-color: var(--accent);
-  background-color: var(--accent-light);
-}
-
-.find-replace-icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.find-replace-text-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid var(--border-color);
-  border-radius: 0.25rem;
-  background-color: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.find-replace-text-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.find-replace-text-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Editor Input Wrapper */
-.editor-container {
-  display: flex;
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background-color: var(--bg-primary);
-}
-
-.editor-textarea-wrapper {
-  display: flex;
-  flex: 1;
-  position: relative;
-  /* overflow: auto; */
-}
-
-.line-numbers {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  padding: 1rem 0.5rem 1rem 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  color: var(--text-tertiary);
-  background-color: var(--bg-secondary);
-  user-select: none;
-  border-right: 1px solid var(--border-color);
-  min-width: 3rem;
-  text-align: right;
-  /* Without a scroll container of its own, setting .scrollTop here (on every
-     textarea scroll, including jumping to a Find match) was silently a
-     no-op, leaving the gutter frozen at the top while the text scrolled
-     underneath it. `hidden` lets JS drive scrollTop without adding its own
-     independently-scrollable UI. */
-  overflow-y: hidden;
-}
-
-.editor-textarea {
-  flex: 1;
-  padding: 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.6;
-  border: none;
-  resize: none;
-  outline: none;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  caret-color: var(--accent);
-}
-
-/* Drag & Drop Overlay */
-.dropzone-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--accent-light);
-  backdrop-filter: blur(4px);
-  border: 3px dashed var(--accent);
-  border-radius: 0.5rem;
-  margin: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  color: var(--accent);
-  z-index: 100;
-  animation: fadeIn 0.15s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  animation: spin 0.8s linear infinite;
-}
-
-.dropzone-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-
-
-/* Markdown Rendering Content Area */
-.preview-container {
-  flex: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
-  background-color: var(--bg-primary);
-}
+   The markdown body reads its colors from local --md-* variables mapped to the theme tokens,
+   so it follows light/dark and the palette on screen; the print block below pins them to a
+   clean light set, whatever theme is active. */
 
 .markdown-body {
+  --md-fg: var(--foreground);
+  --md-muted-fg: var(--muted-foreground);
+  --md-border: var(--border);
+  --md-surface: var(--muted);
+  --md-accent: var(--primary);
+  --md-mark: color-mix(in oklch, var(--warning) 30%, transparent);
+  --md-error: var(--destructive);
+
   font-family: var(--preview-font-family, var(--font-sans));
   font-size: var(--preview-font-size, 1rem);
   line-height: var(--preview-line-height, 1.7);
-  color: var(--text-primary);
+  color: var(--md-fg);
+  overflow-wrap: break-word;
+}
+
+.markdown-body > :first-child,
+.markdown-body td > :first-child {
+  margin-top: 0;
 }
 
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
-.markdown-body h4 {
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--md-fg);
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
 }
 
 .markdown-body h1 {
-  font-size: 2rem;
-  border-bottom: 1px solid var(--border-color);
+  font-size: 2em;
+  border-bottom: 1px solid var(--md-border);
   padding-bottom: 0.3em;
 }
 
 .markdown-body h2 {
-  font-size: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--md-border);
   padding-bottom: 0.3em;
 }
 
 .markdown-body h3 {
-  font-size: 1.25rem;
+  font-size: 1.25em;
 }
 
-.markdown-body h4 {
-  font-size: 1rem;
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 1em;
 }
 
 .markdown-body p,
 .markdown-body ul,
 .markdown-body ol,
-.markdown-body table {
-  margin-bottom: 1rem;
+.markdown-body dl,
+.markdown-body pre,
+.markdown-body blockquote,
+.markdown-body .table-wrapper,
+.markdown-body .code-block-wrapper,
+.markdown-body .mermaid-container {
+  margin-top: 0;
+  margin-bottom: 1em;
 }
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 2rem;
+  padding-left: 2em;
+}
+
+.markdown-body ul {
+  list-style: disc;
+}
+
+.markdown-body ol {
+  list-style: decimal;
+}
+
+.markdown-body ul ul,
+.markdown-body ol ul {
+  list-style: circle;
 }
 
 .markdown-body li {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.25em;
 }
 
-/* Code Blocks & Code Highlighting */
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0;
+}
+
+/* GFM task lists */
+.markdown-body li.task-list-item {
+  list-style: none;
+}
+
+.markdown-body li.task-list-item input[type='checkbox'] {
+  margin: 0 0.5em 0.2em -1.4em;
+  vertical-align: middle;
+  accent-color: var(--md-accent);
+}
+
+.markdown-body a {
+  color: var(--md-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid var(--md-border);
+  margin: 1.5em 0;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+/* Code */
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  padding: 0.15em 0.4em;
+  background-color: var(--md-surface);
+  border-radius: 0.375rem;
+  color: var(--md-accent);
+}
+
+.markdown-body .code-block-wrapper {
+  position: relative;
+}
+
+/* Room for the copy button. */
+.markdown-body .code-block-wrapper pre {
+  padding-right: 3.25rem;
+}
+
 .markdown-body pre {
   padding: 1rem;
-  background-color: var(--md-code-bg);
-  border-radius: 0.5rem;
+  background-color: var(--md-surface);
+  border: 1px solid var(--md-border);
+  border-radius: 0.75rem;
   overflow-x: auto;
-  border: 1px solid var(--border-color);
-  margin-bottom: 1rem;
   white-space: pre-wrap;
-  word-wrap: break-word;
   word-break: break-word;
 }
 
-.markdown-body code {
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  padding: 0.2rem 0.4rem;
-  background-color: var(--md-code-bg);
-  border-radius: 0.25rem;
-  color: var(--accent);
-}
-
 .markdown-body pre code {
+  display: block;
   background-color: transparent;
   padding: 0;
   border-radius: 0;
-  color: var(--text-primary);
+  color: var(--md-fg);
   font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 /* Blockquotes */
 .markdown-body blockquote {
-  padding: 0.5rem 1rem;
-  margin-bottom: 1rem;
-  color: var(--text-secondary);
-  border-left: 0.25rem solid var(--md-quote-border);
-  background-color: var(--md-quote-bg);
+  padding: 0.5em 1em;
+  color: var(--md-muted-fg);
+  border-left: 0.25rem solid var(--md-accent);
+  background-color: var(--md-surface);
+  border-radius: 0 0.5rem 0.5rem 0;
 }
 
-/* Tables */
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* Tables: wrapped in a horizontal scroller so a wide table never widens the page. */
 .markdown-body .table-wrapper {
   overflow-x: auto;
-  margin-bottom: 1rem;
   max-width: 100%;
 }
 
 .markdown-body table {
   width: 100%;
-  min-width: 100%;
   border-collapse: collapse;
-  margin-bottom: 0;
   table-layout: auto;
 }
 
 .markdown-body th,
 .markdown-body td {
-  padding: 0.6rem 1rem;
-  border: 1px solid var(--border-color);
-  word-break: break-word;
+  padding: 0.5em 0.875em;
+  border: 1px solid var(--md-border);
   overflow-wrap: anywhere;
 }
 
 .markdown-body th {
-  background-color: var(--md-table-header-bg);
   font-weight: 600;
   text-align: left;
+  background-color: var(--md-surface);
 }
 
-.markdown-body tr:nth-child(even) {
-  background-color: var(--md-table-zebra);
-}
-
-
-
-/* ==highlight== marks (remark-flexible-markers). A translucent amber over the
-   current background instead of the browser's opaque #ff0 default, so it
-   reads as "highlighter" in every theme (including Dark/Cyberpunk) without
-   fighting the text color. */
+/* ==highlight== marks (remark-flexible-markers): a translucent warning tint so it reads as a
+   highlighter in every theme without fighting the text color. */
 .markdown-body mark {
-  background-color: rgba(250, 204, 21, 0.4);
+  background-color: var(--md-mark);
   color: inherit;
   border-radius: 0.2em;
   padding: 0.05em 0.2em;
@@ -614,440 +221,219 @@
   line-height: 0;
 }
 
-/* Image Embeds */
 .markdown-body img {
   max-width: 100%;
   height: auto;
   border-radius: 0.5rem;
-  border: 1px solid var(--border-color);
-  margin: 1rem 0;
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--md-border);
+  margin: 0.5em 0;
 }
 
-/* Mermaid Diagrams CSS */
-.mermaid-container {
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+/* Mermaid */
+.markdown-body .mermaid-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border: 1px solid var(--md-border);
+  border-radius: 0.75rem;
   padding: 1.5rem;
-  margin-bottom: 1rem;
   overflow-x: auto;
 }
 
-.mermaid-error {
-  color: #ef4444;
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  padding: 1rem;
-  background-color: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.1);
-  border-radius: 0.375rem;
+.markdown-body .mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.markdown-body .mermaid-error {
   width: 100%;
-}
-
-/* Segmented View Mode Selector */
-.view-mode-selector {
-  display: flex;
-  background-color: var(--bg-tertiary);
-  padding: 0.25rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border-color);
-}
-
-.view-mode-selector button {
-  padding: 0.35rem 0.75rem;
+  color: var(--md-error);
   font-size: 0.875rem;
-  font-weight: 600;
+}
+
+.markdown-body .mermaid-error pre {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  border-color: color-mix(in oklch, var(--md-error) 30%, transparent);
+  background-color: color-mix(in oklch, var(--md-error) 6%, transparent);
+  color: inherit;
+}
+
+/* Mermaid renders a light copy for print next to the dark screen copy (see MermaidRenderer). */
+.markdown-body .mermaid-print {
+  display: none;
+}
+
+/* Screen-only: the inactive pane (Editor or Preview) stays mounted so its state and renders
+   (Mermaid diagrams) survive view switches, and so PDF export always has preview content.
+   This must never apply while printing, hence the media scoping. */
+@media screen {
+  .pane-hidden,
+  /* react-resizable-panels puts className on the panel's inner div: hide the outer flex
+     item too, so the remaining panel fills the surface without changing the saved sizes. */
+  [data-panel]:has(> .pane-hidden) {
+    display: none !important;
+  }
+}
+
+/* Print layout table: thead/tfoot spacers repeat the top/bottom page margin on every printed
+   page (Chrome ignores @page margins once @page { margin: 0 } removes the header/footer). */
+.print-layout-table {
+  width: 100%;
+  border-collapse: collapse;
   border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all var(--transition-speed) ease;
+  table-layout: fixed;
 }
 
-.view-mode-selector button:hover {
-  color: var(--text-primary);
+.print-layout-table > thead,
+.print-layout-table > tfoot {
+  display: none;
 }
 
-.view-mode-selector button.active {
-  background-color: var(--bg-primary);
-  color: var(--accent);
-  box-shadow: var(--shadow-sm);
+.print-layout-table > tbody > tr > td {
+  padding: 0;
+  border: none !important;
 }
 
-@media (max-width: 768px) {
-  .workspace {
-    flex-direction: column;
+/* Printing / PDF export: only the rendered document, always light. */
+@media print {
+  @page {
+    margin: 0;
   }
 
-  .resizer {
-    display: none;
+  html,
+  body {
+    color-scheme: light !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 
-  .editor-pane,
-  .preview-pane {
-    width: 100% !important;
-    height: 100%;
-  }
-
-  .desktop-only {
+  .no-print {
     display: none !important;
   }
 
-  /* iOS/Android auto-zoom the page when a focused input's computed font-size
-     is under 16px. Bump these to 16px on mobile so tapping into the editor
-     (or search/rename fields) doesn't trigger an unwanted zoom. */
-  .editor-textarea,
-  .line-numbers,
-  .sidebar-search input,
-  .file-rename-input,
-  .find-replace-input {
-    font-size: 16px;
+  /* Unwrap every app container around the preview so the document flows across pages. */
+  #root,
+  .print-flow,
+  [data-panel]:has(> .print-flow) {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    flex: none !important;
   }
 
-  /* Give the find/replace row breathing room on narrow screens instead of
-     squeezing every control onto one line. */
-  .find-replace-row {
-    flex-wrap: wrap;
+  .markdown-body {
+    --md-fg: #000000;
+    --md-muted-fg: #4b4f45;
+    --md-border: #dcdcd4;
+    --md-surface: #f5f5f0;
+    --md-accent: #3f5e22;
+    --md-mark: rgba(250, 204, 21, 0.4);
+    --md-error: #b42318;
+
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
   }
 
-  /* Responsive Header for Mobile */
-  .brand-title {
-    display: none;
+  .markdown-body .code-block-wrapper pre {
+    padding-right: 1rem;
   }
 
-  .app-header {
-    padding: 0.5rem 0.75rem;
-    gap: 0.5rem;
+  .print-layout-table {
+    display: table !important;
+    width: 100% !important;
+    border: none !important;
+    border-collapse: collapse !important;
   }
 
-  .control-section {
-    gap: 0.35rem;
+  .print-layout-table > thead {
+    display: table-header-group !important;
   }
 
-  /* Hide button texts on mobile to prevent overflow */
-  .theme-btn span,
-  .action-btn-secondary span,
-  .action-btn span {
-    display: none;
+  .print-layout-table > tfoot {
+    display: table-footer-group !important;
   }
 
-  .theme-btn,
-  .action-btn-secondary,
-  .action-btn {
-    padding: 0.5rem;
-  }
-}
-
-/* Settings Menu Dropdown Styling */
-.settings-menu {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.settings-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.5rem;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  min-width: 250px;
-  z-index: 50;
-  gap: 0.85rem;
-  animation: dropdownFade 0.2s ease;
-  color: var(--text-primary);
-}
-
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.settings-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
-.settings-select {
-  padding: 0.4rem 0.6rem;
-  border-radius: 0.375rem;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  outline: none;
-  width: 100%;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-
-.settings-select:focus {
-  border-color: var(--accent);
-}
-
-/* Sidebar Toggle button in header */
-.sidebar-toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  transition: all var(--transition-speed) ease;
-}
-
-.sidebar-toggle-btn:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* Sidebar Content Layout wrapper */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100%;
-  overflow: hidden;
-}
-
-.main-content-layout {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-/* Sidebar structure */
-.sidebar {
-  width: 260px;
-  background-color: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  transition: margin-left var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  z-index: 15;
-}
-
-.sidebar-closed .sidebar {
-  margin-left: -260px;
-}
-
-.sidebar-header {
-  padding: 1rem;
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.new-file-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background-color: var(--accent);
-  color: #ffffff;
-  border: none;
-  padding: 0.625rem;
-  border-radius: 0.375rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color var(--transition-speed);
-}
-
-.new-file-btn:hover {
-  background-color: var(--accent-hover);
-}
-
-/* Sidebar Search */
-.sidebar-search {
-  padding: 0.75rem 1rem;
-  display: flex;
-  align-items: center;
-  position: relative;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.sidebar-search .search-icon {
-  position: absolute;
-  left: 1.5rem;
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
-
-.sidebar-search input {
-  width: 100%;
-  padding: 0.5rem 0.5rem 0.5rem 2rem;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
-  color: var(--text-primary);
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color var(--transition-speed);
-}
-
-.sidebar-search input:focus {
-  border-color: var(--accent);
-}
-
-.clear-search-btn {
-  position: absolute;
-  right: 1.5rem;
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-.clear-search-btn:hover {
-  color: var(--text-primary);
-}
-
-/* File list & items */
-.file-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  padding: 0.625rem 0.75rem;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: background-color var(--transition-speed);
-  margin-bottom: 0.25rem;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  position: relative;
-}
-
-.file-item:hover {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.file-item.active {
-  background-color: var(--accent-light);
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.file-icon {
-  flex-shrink: 0;
-}
-
-.file-title {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.875rem;
-}
-
-.file-rename-input {
-  flex: 1;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--accent);
-  color: var(--text-primary);
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.25rem;
-  font-size: 0.875rem;
-  outline: none;
-  width: 100%;
-}
-
-.file-actions {
-  display: flex;
-  gap: 0.25rem;
-  opacity: 0;
-  transition: opacity var(--transition-speed);
-}
-
-.file-item:hover .file-actions,
-.file-item.active .file-actions {
-  opacity: 1;
-}
-
-.file-action-btn {
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 0.25rem;
-  display: flex;
-  align-items: center;
-  transition: color var(--transition-speed), background-color var(--transition-speed);
-}
-
-.file-action-btn:hover {
-  color: var(--text-primary);
-  background-color: var(--bg-tertiary);
-}
-
-.file-action-btn.delete:hover {
-  color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.empty-search {
-  padding: 1rem;
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: 0.875rem;
-}
-
-/* Mobile Sidebar drawer overrides */
-@media (max-width: 768px) {
-  .sidebar {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    height: 100%;
-    margin-left: -260px;
-    z-index: 100;
-    box-shadow: var(--shadow-lg);
+  .print-layout-table > tbody {
+    display: table-row-group !important;
   }
 
-  .sidebar-open .sidebar {
-    margin-left: 0;
+  .print-layout-table > tbody > tr > td {
+    padding-left: var(--preview-margin, 2rem) !important;
+    padding-right: var(--preview-margin, 2rem) !important;
+    border: none !important;
   }
 
-  .sidebar-open .main-content-layout::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 99;
-    backdrop-filter: blur(2px);
+  .print-layout-table > thead *,
+  .print-layout-table > tfoot * {
+    border: none transparent !important;
+  }
+
+  .print-margin-spacer {
+    height: var(--preview-margin, 2rem);
+    display: block;
+  }
+
+  .markdown-body .mermaid-screen.mermaid-has-print {
+    display: none !important;
+  }
+
+  .markdown-body .mermaid-print {
+    display: flex !important;
+  }
+
+  /* Page breaks */
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    page-break-after: avoid;
+  }
+
+  .markdown-body pre,
+  .markdown-body blockquote,
+  .markdown-body table tr,
+  .markdown-body .mermaid-container,
+  .markdown-body .katex-display,
+  .markdown-body img {
+    page-break-inside: avoid;
+  }
+
+  /* No scrollbar on paper: a wide table must fit the page instead of being clipped. */
+  .markdown-body .table-wrapper {
+    overflow-x: visible !important;
+  }
+
+  .markdown-body table {
+    table-layout: fixed !important;
+  }
+
+  /* Repeat the table header on every page a table spans across. */
+  .markdown-body table thead {
+    display: table-header-group;
   }
 }
-
