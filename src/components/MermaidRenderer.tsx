@@ -49,6 +49,8 @@ let queue: Promise<unknown> = Promise.resolve();
 const renderSvg = (chart: string, mode: Mode, forPrint: boolean, baseId: string): Promise<string> => {
   const run = async () => {
     const elementId = `mermaid-${baseId}-${renderCounter++}`;
+    // Mermaid sizes node boxes from measured text: measuring before Inter has loaded clips labels.
+    await Promise.race([document.fonts?.ready, new Promise((resolve) => setTimeout(resolve, 1500))]).catch(() => undefined);
     try {
       // 'strict' keeps mermaid from emitting scripts/unsafe HTML: notes can arrive from the
       // sync server, and the SVG is injected with dangerouslySetInnerHTML.

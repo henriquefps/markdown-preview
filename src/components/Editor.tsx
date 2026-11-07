@@ -553,7 +553,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
             </IconButton>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Toggle aria-label="Match case" pressed={caseSensitive} onPressedChange={handleToggleCaseSensitive}>
+                <Toggle className="aria-pressed:bg-primary/10 aria-pressed:text-primary" aria-label="Match case" pressed={caseSensitive} onPressedChange={handleToggleCaseSensitive}>
                   <TextAaIcon />
                 </Toggle>
               </TooltipTrigger>

@@ -274,7 +274,10 @@
    (Mermaid diagrams) survive view switches, and so PDF export always has preview content.
    This must never apply while printing, hence the media scoping. */
 @media screen {
-  .pane-hidden {
+  .pane-hidden,
+  /* react-resizable-panels puts className on the panel's inner div: hide the outer flex
+     item too, so the remaining panel fills the surface without changing the saved sizes. */
+  [data-panel]:has(> .pane-hidden) {
     display: none !important;
   }
 }
@@ -320,7 +323,8 @@
 
   /* Unwrap every app container around the preview so the document flows across pages. */
   #root,
-  .print-flow {
+  .print-flow,
+  [data-panel]:has(> .print-flow) {
     display: block !important;
     position: static !important;
     width: 100% !important;

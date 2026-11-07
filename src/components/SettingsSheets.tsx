@@ -110,6 +110,7 @@ const LINE_HEIGHTS: Option[] = [
 const MARGINS: Option[] = [
   { value: '0', label: 'None' },
   { value: '1rem', label: 'Compact (1rem)' },
+  { value: '1.5rem', label: 'Default (1.5rem)' },
   { value: '2rem', label: 'Standard (2rem)' },
   { value: '3.5rem', label: 'Wide (3.5rem)' },
 ];

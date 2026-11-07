@@ -30,6 +30,9 @@ import { IconButton } from '@/components/IconButton';
 import { ThemeMenu, ThemeMenuGroups } from '@/components/ThemeMenu';
 import { cn } from '@/lib/utils';
 
+// --muted equals the chrome background in light, so the selected view is a raised card chip.
+const VIEW_ITEM = 'px-3 data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-xs';
+
 export type ViewMode = 'editor' | 'split' | 'preview';
 export type SyncIndicator = 'off' | 'ok' | 'syncing' | 'error';
 
@@ -81,15 +84,15 @@ export function TopBar(props: TopBarProps) {
         aria-label="View"
         className="ml-1 md:ml-3"
       >
-        <ToggleGroupItem value="editor" className="px-3">
+        <ToggleGroupItem value="editor" className={VIEW_ITEM}>
           Editor
         </ToggleGroupItem>
         {!props.isMobile && (
-          <ToggleGroupItem value="split" className="px-3">
+          <ToggleGroupItem value="split" className={VIEW_ITEM}>
             Split
           </ToggleGroupItem>
         )}
-        <ToggleGroupItem value="preview" className="px-3">
+        <ToggleGroupItem value="preview" className={VIEW_ITEM}>
           Preview
         </ToggleGroupItem>
       </ToggleGroup>
@@ -115,6 +118,7 @@ export function TopBar(props: TopBarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Toggle
+                className="aria-pressed:bg-primary/10 aria-pressed:text-primary"
                 aria-label="Synchronized scrolling"
                 pressed={props.syncScroll}
                 onPressedChange={props.onSyncScrollChange}

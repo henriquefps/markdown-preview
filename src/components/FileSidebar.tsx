@@ -136,8 +136,9 @@ export function FileSidebar(props: FileSidebarProps) {
                     ) : (
                       <div
                         className={cn(
-                          'group/file relative flex min-h-14 items-center rounded-md transition-colors hover:bg-muted/50',
-                          active && 'bg-muted shadow-[inset_2px_0_0_var(--primary)] hover:bg-muted'
+                          'group/file relative flex min-h-14 items-center rounded-md transition-colors hover:bg-sidebar-accent/60',
+                          // --muted equals the sidebar color in light, so the selected fill uses --sidebar-accent.
+                          active && 'bg-sidebar-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-sidebar-accent'
                         )}
                       >
                         <button
