@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import {
@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Edit2, Search, Menu, X, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
 import { syncNotes, type SyncNote } from './lib/sync';
+import { safeGetItem, safeSetItem, subscribeStorageStatus, getStorageWriteFailed } from './lib/storage';
 import './components/MarkdownViewer.css';
 
 const SAMPLE_MARKDOWN = `# Markdown Previewer Showcase 🚀
@@ -140,7 +141,7 @@ const formatRelativeTime = (timestamp: number): string => {
 
 function App() {
   const [files, setFiles] = useState<MarkdownFile[]>(() => {
-    const saved = localStorage.getItem('markdown-files');
+    const saved = safeGetItem('markdown-files');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -159,7 +160,7 @@ function App() {
       updatedAt: Date.now()
     };
     // Migrate legacy content if it exists
-    const legacyContent = localStorage.getItem('markdown-content');
+    const legacyContent = safeGetItem('markdown-content');
     if (legacyContent && legacyContent !== SAMPLE_MARKDOWN) {
       const migratedFile: MarkdownFile = {
         id: 'migrated',
@@ -173,12 +174,14 @@ function App() {
   });
 
   const [activeFileId, setActiveFileId] = useState<string>(() => {
-    const savedActive = localStorage.getItem('active-file-id');
+    const savedActive = safeGetItem('active-file-id');
     if (savedActive && files.some(f => f.id === savedActive)) {
       return savedActive;
     }
     return files[0]?.id || 'default';
   });
+
+  const storageWriteFailed = useSyncExternalStore(subscribeStorageStatus, getStorageWriteFailed);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -188,13 +191,13 @@ function App() {
   const [editingTitle, setEditingTitle] = useState('');
 
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('theme') as Theme;
+    const saved = safeGetItem('theme') as Theme;
     return ['light', 'dark', 'sepia', 'cyberpunk'].includes(saved) ? saved : 'light';
   });
 
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'split'>(() => {
-    const saved = localStorage.getItem('active-tab') as 'editor' | 'preview' | 'split';
+    const saved = safeGetItem('active-tab') as 'editor' | 'preview' | 'split';
     if (['editor', 'preview', 'split'].includes(saved)) {
       if (window.innerWidth <= 768 && saved === 'split') {
         return 'editor';
@@ -207,7 +210,7 @@ function App() {
   const [isSyncScrollEnabled, setIsSyncScrollEnabled] = useState(true);
 
   useEffect(() => {
-    localStorage.setItem('active-tab', activeTab);
+    safeSetItem('active-tab', activeTab);
   }, [activeTab]);
 
   useEffect(() => {
@@ -221,43 +224,43 @@ function App() {
   }, [activeTab]);
 
   // Preview / PDF custom settings
-  const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('preview-font-family') || "'Inter', system-ui, sans-serif");
-  const [fontSize, setFontSize] = useState(() => localStorage.getItem('preview-font-size') || "1rem");
-  const [lineHeight, setLineHeight] = useState(() => localStorage.getItem('preview-line-height') || "1.7");
-  const [margin, setMargin] = useState(() => localStorage.getItem('preview-margin') || "1.5rem");
+  const [fontFamily, setFontFamily] = useState(() => safeGetItem('preview-font-family') || "'Inter', system-ui, sans-serif");
+  const [fontSize, setFontSize] = useState(() => safeGetItem('preview-font-size') || "1rem");
+  const [lineHeight, setLineHeight] = useState(() => safeGetItem('preview-line-height') || "1.7");
+  const [margin, setMargin] = useState(() => safeGetItem('preview-margin') || "1.5rem");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Sync settings to localStorage
   useEffect(() => {
-    localStorage.setItem('preview-font-family', fontFamily);
+    safeSetItem('preview-font-family', fontFamily);
   }, [fontFamily]);
   useEffect(() => {
-    localStorage.setItem('preview-font-size', fontSize);
+    safeSetItem('preview-font-size', fontSize);
   }, [fontSize]);
   useEffect(() => {
-    localStorage.setItem('preview-line-height', lineHeight);
+    safeSetItem('preview-line-height', lineHeight);
   }, [lineHeight]);
   useEffect(() => {
-    localStorage.setItem('preview-margin', margin);
+    safeSetItem('preview-margin', margin);
   }, [margin]);
 
   // Device Sync (local sync server)
-  const [syncEnabled, setSyncEnabled] = useState(() => localStorage.getItem('sync-enabled') === 'true');
-  const [syncServerUrl, setSyncServerUrl] = useState(() => localStorage.getItem('sync-server-url') || '');
-  const [syncApiKey, setSyncApiKey] = useState(() => localStorage.getItem('sync-api-key') || '');
+  const [syncEnabled, setSyncEnabled] = useState(() => safeGetItem('sync-enabled') === 'true');
+  const [syncServerUrl, setSyncServerUrl] = useState(() => safeGetItem('sync-server-url') || '');
+  const [syncApiKey, setSyncApiKey] = useState(() => safeGetItem('sync-api-key') || '');
   const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('sync-enabled', String(syncEnabled));
+    safeSetItem('sync-enabled', String(syncEnabled));
   }, [syncEnabled]);
   useEffect(() => {
-    localStorage.setItem('sync-server-url', syncServerUrl);
+    safeSetItem('sync-server-url', syncServerUrl);
   }, [syncServerUrl]);
   useEffect(() => {
-    localStorage.setItem('sync-api-key', syncApiKey);
+    safeSetItem('sync-api-key', syncApiKey);
   }, [syncApiKey]);
 
   // Always-current snapshot of files for the sync loop to read, so the
@@ -339,15 +342,15 @@ function App() {
 
   // Sync files and active file ID to local storage
   useEffect(() => {
-    localStorage.setItem('markdown-files', JSON.stringify(files));
+    safeSetItem('markdown-files', JSON.stringify(files));
   }, [files]);
 
   useEffect(() => {
-    localStorage.setItem('active-file-id', activeFileId);
+    safeSetItem('active-file-id', activeFileId);
   }, [activeFileId]);
 
   useEffect(() => {
-    localStorage.setItem('theme', theme);
+    safeSetItem('theme', theme);
     // Apply theme class to document body
     document.body.className = `theme-${theme}`;
   }, [theme]);
@@ -534,6 +537,15 @@ function App() {
 
   return (
     <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      {storageWriteFailed && (
+        <div
+          className="no-print"
+          role="alert"
+          style={{ padding: '6px 12px', background: '#fef3c7', color: '#92400e', fontSize: '0.85rem', borderBottom: '1px solid #f59e0b' }}
+        >
+          Browser storage is full, so your latest changes are not being saved locally. Delete large notes or pasted images to free space.
+        </div>
+      )}
       {/* App Header */}
       <header className="app-header no-print">
         <div className="brand-section">
