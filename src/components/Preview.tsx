@@ -10,7 +10,10 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeKatex from 'rehype-katex';
 import { MermaidRenderer } from './MermaidRenderer';
-import { Copy, Check } from 'lucide-react';
+import { CheckIcon, CopyIcon } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface PreviewProps {
   markdown: string;
@@ -100,12 +103,12 @@ const PreviewComponent: React.FC<PreviewProps> = ({
   hidden
 }) => {
   return (
-    <div className={`preview-pane${hidden ? ' pane-hidden' : ''}`} style={{ flex: 1 }}>
-      <div className="pane-header no-print">
-        <span>Preview</span>
-      </div>
+    <section
+      aria-label="Preview"
+      className={cn('print-flow flex h-full min-h-0 min-w-0 flex-col', hidden && 'pane-hidden')}
+    >
       <div
-        className="preview-container"
+        className="print-flow min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8"
         ref={previewContainerRef}
         style={{
           '--preview-font-family': fontFamily,
@@ -114,7 +117,7 @@ const PreviewComponent: React.FC<PreviewProps> = ({
           '--preview-margin': margin
         } as React.CSSProperties}
       >
-        <div className="markdown-body">
+        <div className="markdown-body mx-auto max-w-3xl">
           <table className="print-layout-table">
             <thead>
               <tr>
@@ -142,7 +145,7 @@ const PreviewComponent: React.FC<PreviewProps> = ({
           </table>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -152,7 +155,7 @@ const PreviewComponent: React.FC<PreviewProps> = ({
 // changed.
 export const Preview = React.memo(PreviewComponent);
 
-// Custom component for copying code blocks
+// Code block with a copy button (screen only).
 const CustomCodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {
   const [copied, setCopied] = React.useState(false);
 
@@ -163,34 +166,22 @@ const CustomCodeBlock: React.FC<{ code: string; language: string }> = ({ code, l
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
+      toast.error('Could not copy the code.');
     }
   };
 
   return (
-    <div style={{ position: 'relative' }} className="code-block-wrapper">
-      <button
+    <div className="code-block-wrapper group/code">
+      <Button
+        variant="outline"
+        size="icon-sm"
         onClick={handleCopy}
-        className="no-print"
-        style={{
-          position: 'absolute',
-          top: '0.5rem',
-          right: '0.5rem',
-          backgroundColor: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '0.25rem',
-          padding: '0.25rem',
-          cursor: 'pointer',
-          color: 'var(--text-secondary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'all 0.15s ease',
-          zIndex: 10
-        }}
-        title="Copy code"
+        className="no-print absolute top-2 right-2 bg-card"
+        aria-label={copied ? 'Copied' : 'Copy code'}
+        title={copied ? 'Copied' : 'Copy code'}
       >
-        {copied ? <Check size={14} style={{ color: '#10b981' }} /> : <Copy size={14} />}
-      </button>
+        {copied ? <CheckIcon className="text-primary" /> : <CopyIcon />}
+      </Button>
       <pre>
         <code className={`language-${language}`}>{code}</code>
       </pre>

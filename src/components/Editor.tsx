@@ -1,10 +1,43 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bold, Italic, Code, Link, Table, Image, Heading1, Heading2,
-  Heading3, Activity, Trash2, BookOpen, Search, X, ChevronUp,
-  ChevronDown, CaseSensitive, Replace, ReplaceAll
-} from 'lucide-react';
-import './MarkdownViewer.css';
+  BookOpenIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  CodeBlockIcon,
+  CodeIcon,
+  DotsThreeIcon,
+  ImageIcon,
+  LinkIcon,
+  MagnifyingGlassIcon,
+  SwapIcon,
+  TableIcon,
+  TextAaIcon,
+  TextBIcon,
+  TextHOneIcon,
+  TextHThreeIcon,
+  TextHTwoIcon,
+  TextItalicIcon,
+  TrashIcon,
+  TreeStructureIcon,
+  XIcon,
+  type Icon,
+} from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
+import { Separator } from '@/components/ui/separator';
+import { Toggle } from '@/components/ui/toggle';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ConfirmDialog, type ConfirmRequest } from '@/components/ConfirmDialog';
+import { IconButton } from '@/components/IconButton';
+import { cn } from '@/lib/utils';
 
 interface EditorProps {
   value: string;
@@ -14,6 +47,35 @@ interface EditorProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   hidden?: boolean;
 }
+
+type ActionId = 'h1' | 'h2' | 'h3' | 'bold' | 'italic' | 'code' | 'codeBlock' | 'link' | 'table' | 'image' | 'mermaid';
+
+interface ToolbarAction {
+  id: ActionId;
+  label: string;
+  icon: Icon;
+}
+
+const FORMAT_ACTIONS: ToolbarAction[][] = [
+  [
+    { id: 'h1', label: 'Heading 1', icon: TextHOneIcon },
+    { id: 'h2', label: 'Heading 2', icon: TextHTwoIcon },
+    { id: 'h3', label: 'Heading 3', icon: TextHThreeIcon },
+  ],
+  [
+    { id: 'bold', label: 'Bold', icon: TextBIcon },
+    { id: 'italic', label: 'Italic', icon: TextItalicIcon },
+    { id: 'code', label: 'Inline code', icon: CodeIcon },
+    { id: 'codeBlock', label: 'Code block', icon: CodeBlockIcon },
+  ],
+];
+
+const INSERT_ACTIONS: ToolbarAction[] = [
+  { id: 'link', label: 'Link', icon: LinkIcon },
+  { id: 'table', label: 'Table', icon: TableIcon },
+  { id: 'image', label: 'Image', icon: ImageIcon },
+  { id: 'mermaid', label: 'Mermaid diagram', icon: TreeStructureIcon },
+];
 
 interface MatchRange {
   start: number;
@@ -39,6 +101,21 @@ const findAllMatches = (haystack: string, query: string, caseSensitive: boolean)
 
 export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoadSample, textareaRef, hidden }) => {
   const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLElement>(null);
+  // Pane width decides which toolbar groups fit inline; the rest fold into "More". Measured
+  // (not a container query) because the "More" menu is portaled outside the pane.
+  const [paneWidth, setPaneWidth] = useState(1024);
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setPaneWidth(entry.contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const insertInline = paneWidth >= 576;
+  const fileActionsInline = paneWidth >= 720;
   const findInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -48,6 +125,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   const [replaceQuery, setReplaceQuery] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
 
   const matches = useMemo(() => findAllMatches(value, findQuery, caseSensitive), [value, findQuery, caseSensitive]);
   const displayPosition = matches.length === 0
@@ -155,14 +233,18 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
 
   const handleReplaceAll = () => {
     if (matches.length === 0) return;
-    const confirmed = window.confirm(
-      `Replace all ${matches.length} occurrence(s) of "${findQuery}" with "${replaceQuery}"?`
-    );
-    if (!confirmed) return;
+    setConfirm({
+      title: `Replace all ${matches.length} ${matches.length === 1 ? 'occurrence' : 'occurrences'}?`,
+      description: `Every "${findQuery}" in this file becomes "${replaceQuery}".`,
+      confirmLabel: 'Replace all',
+      onConfirm: () => replaceAllNow(matches),
+    });
+  };
 
+  const replaceAllNow = (matchList: MatchRange[]) => {
     let newValue = '';
     let cursor = 0;
-    for (const m of matches) {
+    for (const m of matchList) {
       newValue += value.slice(cursor, m.start) + replaceQuery;
       cursor = m.end;
     }
@@ -197,7 +279,8 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   useEffect(() => {
     if (!isFindOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // Escape inside an open dialog belongs to the dialog, not the find bar.
+      if (e.key === 'Escape' && !document.querySelector('[role="alertdialog"]')) {
         closeFind();
       }
     };
@@ -311,7 +394,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   const processFiles = async (files: File[]) => {
     const images = files.filter((f) => f.type.startsWith('image/'));
     if (images.length === 0) {
-      alert('Only images can be embedded directly.');
+      toast.error('Only images can be embedded directly.');
       return;
     }
     try {
@@ -320,7 +403,7 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
       insertText(markdown);
     } catch (err) {
       console.error('Failed to read image', err);
-      alert('Could not read one of the images.');
+      toast.error('Could not read one of the images.');
     }
   };
 
@@ -342,130 +425,208 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
     }
   };
 
+  const runAction = (id: ActionId) => {
+    switch (id) {
+      case 'h1': return handleHeading(1);
+      case 'h2': return handleHeading(2);
+      case 'h3': return handleHeading(3);
+      case 'bold': return handleBold();
+      case 'italic': return handleItalic();
+      case 'code': return handleCode();
+      case 'codeBlock': return handleCodeBlock();
+      case 'link': return handleLink();
+      case 'table': return handleTable();
+      case 'image': return handleImage();
+      case 'mermaid': return handleMermaid();
+    }
+  };
+
+  const renderButtons = (actions: ToolbarAction[]) =>
+    actions.map(({ id, label, icon: ActionIcon }) => (
+      <IconButton key={id} label={label} onClick={() => runAction(id)}>
+        <ActionIcon />
+      </IconButton>
+    ));
+
   return (
-    <div className={`editor-pane${hidden ? ' pane-hidden' : ''}`} style={{ flex: 1 }} onKeyDown={handleEditorPaneKeyDown}>
-      <div className="pane-header no-print">
-        <span>Editor</span>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="action-btn-secondary" onClick={openFind} title="Find & Replace (Ctrl/Cmd+F)" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
-            <Search size={14} /> Find
-          </button>
-          <button className="action-btn-secondary" onClick={onLoadSample} title="Load sample markdown" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
-            <BookOpen size={14} /> Sample
-          </button>
-          <button className="action-btn-secondary" onClick={onClear} title="Clear all text" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', color: '#ef4444' }}>
-            <Trash2 size={14} /> Clear
-          </button>
+    <section
+      ref={paneRef}
+      aria-label="Editor"
+      className={cn('@container/editor flex h-full min-h-0 min-w-0 flex-col no-print', hidden && 'pane-hidden')}
+      onKeyDown={handleEditorPaneKeyDown}
+    >
+      {/* Markdown toolbar. The insert group and the file actions fold into "More" on narrow panes. */}
+      <div role="toolbar" aria-label="Formatting" className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
+        {FORMAT_ACTIONS.map((group, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <Separator orientation="vertical" className="mx-1 h-5 data-vertical:self-center" />}
+            {renderButtons(group)}
+          </React.Fragment>
+        ))}
+        {insertInline && (
+          <>
+            <Separator orientation="vertical" className="mx-1 h-5 data-vertical:self-center" />
+            {renderButtons(INSERT_ACTIONS)}
+          </>
+        )}
+
+        <div className="ml-auto flex items-center gap-1">
+          <IconButton label="Find and replace" tooltip="Find and replace (Ctrl/Cmd+F)" onClick={openFind}>
+            <MagnifyingGlassIcon />
+          </IconButton>
+          {fileActionsInline ? (
+            <>
+              <IconButton label="Load sample" tooltip="Load the sample document" onClick={onLoadSample}>
+                <BookOpenIcon />
+              </IconButton>
+              <IconButton label="Clear editor" onClick={onClear}>
+                <TrashIcon />
+              </IconButton>
+            </>
+          ) : (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="More editor actions">
+                    <DotsThreeIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>More</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              {!insertInline && (
+                <>
+                  {INSERT_ACTIONS.map(({ id, label, icon: ActionIcon }) => (
+                    <DropdownMenuItem key={id} onSelect={() => runAction(id)}>
+                      <ActionIcon />
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onSelect={onLoadSample}>
+                <BookOpenIcon />
+                Load sample
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={onClear}>
+                <TrashIcon />
+                Clear editor
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          )}
         </div>
       </div>
 
-      {/* Markdown Toolbar */}
-      <div className="toolbar no-print">
-        <button className="toolbar-btn" onClick={() => handleHeading(1)} title="Heading 1"><Heading1 size={16} /></button>
-        <button className="toolbar-btn" onClick={() => handleHeading(2)} title="Heading 2"><Heading2 size={16} /></button>
-        <button className="toolbar-btn" onClick={() => handleHeading(3)} title="Heading 3"><Heading3 size={16} /></button>
-        <div className="toolbar-separator"></div>
-        <button className="toolbar-btn" onClick={handleBold} title="Bold"><Bold size={16} /></button>
-        <button className="toolbar-btn" onClick={handleItalic} title="Italic"><Italic size={16} /></button>
-        <button className="toolbar-btn" onClick={handleCode} title="Inline Code"><Code size={16} /></button>
-        <button className="toolbar-btn" onClick={handleCodeBlock} title="Code Block"><Code size={16} style={{ transform: 'rotate(90deg)' }} /></button>
-        <div className="toolbar-separator"></div>
-        <button className="toolbar-btn" onClick={handleLink} title="Add Link"><Link size={16} /></button>
-        <button className="toolbar-btn" onClick={handleTable} title="Add Table"><Table size={16} /></button>
-        <button className="toolbar-btn" onClick={handleImage} title="Embed Image"><Image size={16} /></button>
-        <button className="toolbar-btn" onClick={handleMermaid} title="Add Mermaid Diagram"><Activity size={16} /></button>
-      </div>
-
-      {/* Find & Replace Bar */}
+      {/* Find & replace */}
       {isFindOpen && (
-        <div className="find-replace-bar no-print">
-          <div className="find-replace-row">
-            <Search size={14} className="find-replace-icon" />
-            <input
-              ref={findInputRef}
-              type="text"
-              className="find-replace-input"
-              placeholder="Find"
-              value={findQuery}
-              onChange={(e) => handleFindQueryChange(e.target.value)}
-              onKeyDown={handleFindInputKeyDown}
-            />
-            {findQuery && (
-              <span className="find-replace-counter">
-                {matches.length === 0 ? 'No results' : `${displayPosition}/${matches.length}`}
-              </span>
-            )}
-            <button className="find-replace-icon-btn" onClick={handleFindPrevious} disabled={matches.length === 0} title="Previous (Shift+Enter)">
-              <ChevronUp size={14} />
-            </button>
-            <button className="find-replace-icon-btn" onClick={handleFindNext} disabled={matches.length === 0} title="Next (Enter)">
-              <ChevronDown size={14} />
-            </button>
-            <button
-              className={`find-replace-icon-btn ${caseSensitive ? 'active' : ''}`}
-              onClick={handleToggleCaseSensitive}
-              title="Match case"
-            >
-              <CaseSensitive size={14} />
-            </button>
-            <button className="find-replace-icon-btn" onClick={closeFind} title="Close (Esc)">
-              <X size={14} />
-            </button>
+        <div role="search" className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 @xl/editor:px-4">
+          <div className="flex items-center gap-1">
+            <InputGroup className="min-w-0 flex-1">
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                ref={findInputRef}
+                aria-label="Find"
+                placeholder="Find"
+                value={findQuery}
+                onChange={(e) => handleFindQueryChange(e.target.value)}
+                onKeyDown={handleFindInputKeyDown}
+              />
+              {findQuery && (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupText className="text-[0.8125rem] font-normal tabular-nums" aria-live="polite">
+                    {matches.length === 0 ? 'No results' : `${displayPosition} of ${matches.length}`}
+                  </InputGroupText>
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+            <IconButton label="Previous match" tooltip="Previous (Shift+Enter)" onClick={handleFindPrevious} disabled={matches.length === 0}>
+              <CaretUpIcon />
+            </IconButton>
+            <IconButton label="Next match" tooltip="Next (Enter)" onClick={handleFindNext} disabled={matches.length === 0}>
+              <CaretDownIcon />
+            </IconButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle aria-label="Match case" pressed={caseSensitive} onPressedChange={handleToggleCaseSensitive}>
+                  <TextAaIcon />
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>Match case</TooltipContent>
+            </Tooltip>
+            <IconButton label="Close find" tooltip="Close (Esc)" onClick={closeFind}>
+              <XIcon />
+            </IconButton>
           </div>
-          <div className="find-replace-row">
-            <Replace size={14} className="find-replace-icon" />
-            <input
-              type="text"
-              className="find-replace-input"
-              placeholder="Replace"
-              value={replaceQuery}
-              onChange={(e) => setReplaceQuery(e.target.value)}
-              onKeyDown={handleReplaceInputKeyDown}
-            />
-            <button className="find-replace-text-btn" onClick={handleReplace} disabled={matches.length === 0}>
+          <div className="flex flex-wrap items-center gap-1 @md/editor:flex-nowrap">
+            <InputGroup className="min-w-0 basis-full @md/editor:basis-auto @md/editor:flex-1">
+              <InputGroupAddon>
+                <SwapIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label="Replace with"
+                placeholder="Replace"
+                value={replaceQuery}
+                onChange={(e) => setReplaceQuery(e.target.value)}
+                onKeyDown={handleReplaceInputKeyDown}
+              />
+            </InputGroup>
+            <Button variant="outline" onClick={handleReplace} disabled={matches.length === 0}>
               Replace
-            </button>
-            <button className="find-replace-text-btn" onClick={handleReplaceAll} disabled={matches.length === 0}>
-              <ReplaceAll size={14} /> Replace All
-            </button>
+            </Button>
+            <Button variant="outline" onClick={handleReplaceAll} disabled={matches.length === 0}>
+              Replace all
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Editor Main Area */}
-      <div 
-        className="editor-container"
+      {/* Editor area */}
+      <div
+        className="relative flex min-h-0 flex-1"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {isDragOver && (
-          <div className="dropzone-overlay">
-            <Image size={48} className="animate-bounce" />
-            <div className="dropzone-text">Drop the image here to embed it</div>
+          <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary bg-card/90 text-primary animate-in fade-in-0">
+            <ImageIcon className="size-10" aria-hidden />
+            <p className="text-base font-semibold">Drop the image here to embed it</p>
           </div>
         )}
 
-        <div className="editor-textarea-wrapper">
-          {/* Synchronized Line Numbers */}
-          <div className="line-numbers no-print" ref={lineNumbersRef}>
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
-          </div>
-
-          <textarea
-            ref={textareaRef}
-            className="editor-textarea"
-            placeholder="Type your markdown here... drag-and-drop/paste images, or insert a Mermaid graph!"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onScroll={handleScroll}
-            onPaste={handlePaste}
-          />
+        {/* Line numbers, scrolled in step with the textarea. overflow-hidden (not visible) so
+            JS can drive scrollTop without the gutter becoming its own scroller. */}
+        <div
+          ref={lineNumbersRef}
+          aria-hidden
+          className="line-numbers w-12 shrink-0 overflow-hidden border-r py-4 pr-2 text-right font-mono text-[0.8125rem] leading-6 text-muted-foreground tabular-nums select-none"
+        >
+          {Array.from({ length: lineCount }, (_, i) => (
+            <div key={i}>{i + 1}</div>
+          ))}
         </div>
+
+        <textarea
+          ref={textareaRef}
+          aria-label="Markdown source"
+          spellCheck={false}
+          className="min-w-0 flex-1 resize-none bg-transparent p-4 font-mono text-base leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground md:text-sm"
+          placeholder="Type your markdown here… drag and drop or paste images, or insert a Mermaid graph."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onScroll={handleScroll}
+          onPaste={handlePaste}
+        />
       </div>
-    </div>
+
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+    </section>
   );
 };

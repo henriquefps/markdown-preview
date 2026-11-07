@@ -3,10 +3,17 @@ import { createRoot } from 'react-dom/client'
 import 'katex/dist/katex.min.css'
 import './index.css'
 import App from './App.tsx'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { initTheme } from '@/lib/theme/theme'
+
+// Applies the saved theme and palette before the first paint (no inline script, CSP-safe).
+initTheme()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <TooltipProvider delayDuration={300}>
+      <App />
+    </TooltipProvider>
   </StrictMode>,
 )
 
