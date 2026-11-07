@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpenIcon,
   CaretDownIcon,
@@ -136,6 +136,85 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
   const lines = value.split('\n');
   const lineCount = Math.max(lines.length, 1);
 
+  // The textarea soft-wraps, so one source line can span several visual rows. A hidden mirror
+  // (same width, padding, font and wrapping as the textarea, one child per source line)
+  // measures each line's wrapped height; every gutter entry gets that height, and lineTopsRef
+  // keeps each line's top offset for find-and-replace scrolling. Heights are written to the
+  // DOM directly (no state), so typing does not cost an extra render.
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const lineTopsRef = useRef<number[]>([]);
+  const measureFrameRef = useRef(0);
+
+  const measureLines = useCallback(() => {
+    const textarea = textareaRef.current;
+    const mirror = mirrorRef.current;
+    const gutter = lineNumbersRef.current;
+    if (!textarea || !mirror || !gutter || textarea.clientWidth === 0) return;
+    const cs = getComputedStyle(textarea);
+    const ms = mirror.style;
+    ms.width = `${textarea.clientWidth}px`;
+    ms.boxSizing = 'border-box';
+    ms.paddingLeft = cs.paddingLeft;
+    ms.paddingRight = cs.paddingRight;
+    ms.font = cs.font;
+    ms.lineHeight = cs.lineHeight;
+    ms.letterSpacing = cs.letterSpacing;
+    ms.wordSpacing = cs.wordSpacing;
+    ms.tabSize = cs.tabSize;
+    ms.textTransform = cs.textTransform;
+    ms.whiteSpace = 'pre-wrap';
+    ms.overflowWrap = cs.overflowWrap;
+    ms.wordBreak = cs.wordBreak;
+
+    const sourceLines = textarea.value.split('\n');
+    const rows = sourceLines.map((line) => {
+      const row = document.createElement('div');
+      // An empty line still occupies one row.
+      row.textContent = line.length > 0 ? line : '\u200b';
+      return row;
+    });
+    mirror.replaceChildren(...rows);
+
+    const fallback = parseFloat(cs.lineHeight) || 24;
+    const tops: number[] = [];
+    let top = 0;
+    const entries = gutter.children;
+    rows.forEach((row, i) => {
+      const height = row.getBoundingClientRect().height || fallback;
+      tops.push(top);
+      top += height;
+      const entry = entries[i] as HTMLElement | undefined;
+      if (entry) entry.style.height = `${height}px`;
+    });
+    lineTopsRef.current = tops;
+    mirror.replaceChildren();
+    gutter.scrollTop = textarea.scrollTop;
+  }, [textareaRef]);
+
+  const scheduleMeasure = useCallback(() => {
+    cancelAnimationFrame(measureFrameRef.current);
+    measureFrameRef.current = requestAnimationFrame(measureLines);
+  }, [measureLines]);
+
+  // Re-measure before paint whenever the text changes.
+  useLayoutEffect(() => {
+    measureLines();
+  }, [value, measureLines]);
+
+  // ...and whenever the textarea's size changes (window resize, Resizable panel drags, sidebar
+  // toggle, view switch) or the editor font finishes loading.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(textarea);
+    document.fonts?.ready.then(scheduleMeasure).catch(() => undefined);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(measureFrameRef.current);
+    };
+  }, [textareaRef, scheduleMeasure]);
+
   // Synchronize scrolling of line numbers and textarea
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     if (lineNumbersRef.current) {
@@ -157,7 +236,9 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
     const style = getComputedStyle(textarea);
     const lineHeight = parseFloat(style.lineHeight) || 20;
     const paddingTop = parseFloat(style.paddingTop) || 0;
-    const targetScrollTop = paddingTop + lineNumber * lineHeight - textarea.clientHeight / 2 + lineHeight / 2;
+    // Measured top of the (possibly wrapped) source line; falls back to one row per line.
+    const lineTop = lineTopsRef.current[lineNumber] ?? lineNumber * lineHeight;
+    const targetScrollTop = paddingTop + lineTop - textarea.clientHeight / 2 + lineHeight / 2;
     textarea.scrollTop = Math.max(0, targetScrollTop);
     if (lineNumbersRef.current) {
       lineNumbersRef.current.scrollTop = textarea.scrollTop;
@@ -623,6 +704,13 @@ export const Editor: React.FC<EditorProps> = ({ value, onChange, onClear, onLoad
           onChange={(e) => onChange(e.target.value)}
           onScroll={handleScroll}
           onPaste={handlePaste}
+        />
+
+        {/* Measuring mirror for wrapped line heights (see measureLines). */}
+        <div
+          ref={mirrorRef}
+          aria-hidden
+          className="pointer-events-none invisible absolute top-0 left-0 h-0 overflow-hidden"
         />
       </div>
 
