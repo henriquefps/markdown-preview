@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import type { PluggableList } from 'unified';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkEmoji from 'remark-emoji';
@@ -38,7 +39,58 @@ const sanitizeSchema = {
   }
 };
 
-export const Preview: React.FC<PreviewProps> = ({
+// react-markdown re-parses and rebuilds its whole element tree on every render,
+// which is enough to disturb an in-progress text selection in the preview pane
+// even when the output ends up identical. Preview is wrapped in React.memo below
+// so it only actually re-renders when its own props change value — but that only
+// helps if the plugin arrays/components below are stable references too, since
+// otherwise they'd look like "new props" on every parent re-render regardless.
+const remarkPluginsList: PluggableList = [[remarkGfm, { singleTilde: false }], remarkMath, remarkEmoji, remarkSupersub, remarkFlexibleMarkers];
+const rehypePluginsList: PluggableList = [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex];
+
+// Custom code component to render Mermaid diagrams or standard code blocks.
+// react-markdown v9+ no longer passes an `inline` prop, so block-level fences
+// are distinguished from inline spans by whether the source node spans multiple
+// lines (a fence always does, even without a language tag).
+const CodeBlockComponent: Components['code'] = ({ node, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const isMultiLine = node?.position && node.position.start.line !== node.position.end.line;
+  const isInline = !isMultiLine && !match;
+
+  if (isInline) {
+    return <code className={className} {...props}>{children}</code>;
+  }
+
+  const codeString = String(children).replace(/\n$/, '');
+
+  if (match && match[1] === 'mermaid') {
+    return <MermaidRenderer chart={codeString} />;
+  }
+
+  // Standard Code Block component with Copy button
+  return <CustomCodeBlock code={codeString} language={match ? match[1] : 'text'} />;
+};
+
+// react-markdown always wraps the `code` renderer's output in its own default
+// `<pre>`, which would nest our CustomCodeBlock's <pre> inside another <pre>
+// (invalid HTML, doubled padding/border). We take over that wrapping ourselves.
+const PreComponent: Components['pre'] = ({ children }) => <>{children}</>;
+
+// Wrap tables in a horizontally scrollable container so wide tables no longer
+// force the whole page/monitor to widen to be readable.
+const TableComponent: Components['table'] = ({ children, ...props }) => (
+  <div className="table-wrapper">
+    <table {...props}>{children}</table>
+  </div>
+);
+
+const markdownComponents: Components = {
+  code: CodeBlockComponent,
+  pre: PreComponent,
+  table: TableComponent
+};
+
+const PreviewComponent: React.FC<PreviewProps> = ({
   markdown,
   previewContainerRef,
   fontFamily,
@@ -47,42 +99,6 @@ export const Preview: React.FC<PreviewProps> = ({
   margin,
   hidden
 }) => {
-  // Custom code component to render Mermaid diagrams or standard code blocks.
-  // react-markdown v9+ no longer passes an `inline` prop, so block-level fences
-  // are distinguished from inline spans by whether the source node spans multiple
-  // lines (a fence always does, even without a language tag).
-  const CodeBlockComponent: Components['code'] = ({ node, className, children, ...props }) => {
-    const match = /language-(\w+)/.exec(className || '');
-    const isMultiLine = node?.position && node.position.start.line !== node.position.end.line;
-    const isInline = !isMultiLine && !match;
-
-    if (isInline) {
-      return <code className={className} {...props}>{children}</code>;
-    }
-
-    const codeString = String(children).replace(/\n$/, '');
-
-    if (match && match[1] === 'mermaid') {
-      return <MermaidRenderer chart={codeString} />;
-    }
-
-    // Standard Code Block component with Copy button
-    return <CustomCodeBlock code={codeString} language={match ? match[1] : 'text'} />;
-  };
-
-  // react-markdown always wraps the `code` renderer's output in its own default
-  // `<pre>`, which would nest our CustomCodeBlock's <pre> inside another <pre>
-  // (invalid HTML, doubled padding/border). We take over that wrapping ourselves.
-  const PreComponent: Components['pre'] = ({ children }) => <>{children}</>;
-
-  // Wrap tables in a horizontally scrollable container so wide tables no longer
-  // force the whole page/monitor to widen to be readable.
-  const TableComponent: Components['table'] = ({ children, ...props }) => (
-    <div className="table-wrapper">
-      <table {...props}>{children}</table>
-    </div>
-  );
-
   return (
     <div className={`preview-pane${hidden ? ' pane-hidden' : ''}`} style={{ flex: 1 }}>
       <div className="pane-header no-print">
@@ -109,13 +125,9 @@ export const Preview: React.FC<PreviewProps> = ({
               <tr>
                 <td>
                   <ReactMarkdown
-                    remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkMath, remarkEmoji, remarkSupersub, remarkFlexibleMarkers]}
-                    rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
-                    components={{
-                      code: CodeBlockComponent,
-                      pre: PreComponent,
-                      table: TableComponent
-                    }}
+                    remarkPlugins={remarkPluginsList}
+                    rehypePlugins={rehypePluginsList}
+                    components={markdownComponents}
                   >
                     {markdown}
                   </ReactMarkdown>
@@ -133,6 +145,12 @@ export const Preview: React.FC<PreviewProps> = ({
     </div>
   );
 };
+
+// Memoized so unrelated App-level state changes (sync status ticking, theme
+// dropdown, etc.) don't force react-markdown to rebuild this whole tree and
+// disturb an in-progress text selection when the actual preview props haven't
+// changed.
+export const Preview = React.memo(PreviewComponent);
 
 // Custom component for copying code blocks
 const CustomCodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {

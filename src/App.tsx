@@ -283,13 +283,23 @@ function App() {
       }));
       const serverNotes = await syncNotes(url, payload, syncApiKey);
       const merged = applyServerNotes(filesRef.current, serverNotes);
-      setFiles(merged);
-      setActiveFileId((prevId) => {
-        const stillValid = merged.find((f) => f.id === prevId && !f.deleted);
-        if (stillValid) return prevId;
-        const fallback = merged.find((f) => !f.deleted);
-        return fallback ? fallback.id : prevId;
-      });
+      // applyServerNotes reuses the same object reference for any note that
+      // didn't actually change, but Array.from() always returns a brand new
+      // array — so without this check, every sync tick (even a total no-op
+      // one) would replace `files` wholesale and re-render the whole app,
+      // which is enough to disturb an in-progress text selection in the
+      // preview pane even though nothing on screen actually changed.
+      const unchanged = merged.length === filesRef.current.length
+        && merged.every((f, i) => f === filesRef.current[i]);
+      if (!unchanged) {
+        setFiles(merged);
+        setActiveFileId((prevId) => {
+          const stillValid = merged.find((f) => f.id === prevId && !f.deleted);
+          if (stillValid) return prevId;
+          const fallback = merged.find((f) => !f.deleted);
+          return fallback ? fallback.id : prevId;
+        });
+      }
       setSyncStatus('success');
       setLastSyncedAt(Date.now());
     } catch (err) {
