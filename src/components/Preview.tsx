@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import type { PluggableList } from 'unified';
+import type { Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkEmoji from 'remark-emoji';
@@ -45,8 +45,8 @@ const sanitizeSchema = {
 // so it only actually re-renders when its own props change value — but that only
 // helps if the plugin arrays/components below are stable references too, since
 // otherwise they'd look like "new props" on every parent re-render regardless.
-const remarkPluginsList: PluggableList = [[remarkGfm, { singleTilde: false }], remarkMath, remarkEmoji, remarkSupersub, remarkFlexibleMarkers];
-const rehypePluginsList: PluggableList = [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex];
+const remarkPluginsList: Options['remarkPlugins'] = [[remarkGfm, { singleTilde: false }], remarkMath, remarkEmoji, remarkSupersub, remarkFlexibleMarkers];
+const rehypePluginsList: Options['rehypePlugins'] = [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex];
 
 // Custom code component to render Mermaid diagrams or standard code blocks.
 // react-markdown v9+ no longer passes an `inline` prop, so block-level fences
