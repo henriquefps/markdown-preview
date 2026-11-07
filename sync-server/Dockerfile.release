@@ -1,0 +1,18 @@
+# Used by GoReleaser (dockers_v2): the binaries are already built, one per
+# platform, under <os>/<arch>/ in the build context.
+
+FROM --platform=$BUILDPLATFORM busybox:1.37 AS prep
+RUN mkdir -p /out/data
+
+FROM gcr.io/distroless/static-debian13:nonroot
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/markdown-preview-sync /usr/local/bin/markdown-preview-sync
+COPY --from=prep --chown=65532:65532 /out/data /app/data
+WORKDIR /app
+ENV PORT=3041 \
+    DATA_DIR=/app/data
+EXPOSE 3041
+VOLUME /app/data
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/markdown-preview-sync"]
+CMD ["serve"]
