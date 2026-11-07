@@ -1,0 +1,27 @@
+services:
+  markdown-sync:
+    build: .
+    container_name: markdown-preview-sync
+    ports:
+      - "3041:3041"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Required once this is reachable from outside your LAN (e.g. behind
+      # the cloudflared tunnel below) — otherwise anyone with the URL could
+      # read/write your notes. Set in .env, never commit the real value.
+      - SYNC_API_KEY=${SYNC_API_KEY:-}
+    restart: unless-stopped
+
+  # Optional: only needed if you want this server reachable outside your LAN
+  # (e.g. from a phone on mobile data, or because your app is served over
+  # HTTPS and browsers block it from calling a plain-HTTP LAN address). Get
+  # CLOUDFLARE_TUNNEL_TOKEN from the Zero Trust dashboard when you create the
+  # tunnel; put it in .env, never in this file. See README.md.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: markdown-preview-sync-tunnel
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - markdown-sync

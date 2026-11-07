@@ -25,3 +25,9 @@ dist-ssr
 
 # Linear workflow config
 .linear-config
+
+# Sync server local data
+sync-server/data/*.json
+
+# Sync server secrets (API key, Cloudflare tunnel token)
+sync-server/.env

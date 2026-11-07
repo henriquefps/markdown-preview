@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
-import { 
+import {
   FileText, Download, Moon, Sun, Link2, Link2Off, Settings,
-  Plus, Trash2, Edit2, Search, Menu, X
+  Plus, Trash2, Edit2, Search, Menu, X, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
+import { syncNotes, type SyncNote } from './lib/sync';
+import { useDismiss } from './hooks/useDismiss';
+import { safeGetItem, safeSetItem, subscribeStorageStatus, getStorageWriteFailed } from './lib/storage';
 import './components/MarkdownViewer.css';
 
 const SAMPLE_MARKDOWN = `# Markdown Previewer Showcase 🚀
@@ -87,11 +90,69 @@ interface MarkdownFile {
   title: string;
   content: string;
   updatedAt: number;
+  // False/undefined = title tracks the first line of content automatically.
+  // True once the user explicitly renames the file, which locks it.
+  titleIsCustom?: boolean;
+  // Soft-delete tombstone: kept (not spliced out) so a delete can propagate
+  // to other synced devices instead of silently resurrecting on next sync.
+  deleted?: boolean;
 }
+
+// Used for files whose title hasn't been manually set: mirrors the first
+// non-empty line of the document, stripped of heading/list/quote markers.
+const deriveTitleFromContent = (content: string): string => {
+  const firstLine = content.split('\n').find((line) => line.trim().length > 0) || '';
+  const cleaned = firstLine.replace(/^#{1,6}\s+/, '').replace(/^[-*>]\s+/, '').trim();
+  if (!cleaned) return 'Untitled.md';
+  const truncated = cleaned.length > 50 ? `${cleaned.slice(0, 50).trimEnd()}…` : cleaned;
+  return `${truncated}.md`;
+};
+
+// Reconciles the sync server's authoritative (already last-write-wins merged)
+// note list into local files: newer remote revisions overwrite local ones,
+// brand new remote notes get added, and each file's local-only titleIsCustom
+// flag (never sent to the server) is preserved.
+const applyServerNotes = (localFiles: MarkdownFile[], serverNotes: SyncNote[]): MarkdownFile[] => {
+  const byId = new Map(localFiles.map((f) => [f.id, f]));
+  for (const remote of serverNotes) {
+    const local = byId.get(remote.id);
+    if (!local || remote.updatedAt > local.updatedAt) {
+      byId.set(remote.id, {
+        id: remote.id,
+        title: remote.title,
+        content: remote.content,
+        updatedAt: remote.updatedAt,
+        deleted: remote.deleted,
+        titleIsCustom: local?.titleIsCustom
+      });
+    }
+  }
+  return Array.from(byId.values());
+};
+
+// A note's title follows its first line unless the user renamed it. Notes that
+// arrive from the sync server (or legacy data) have no `titleIsCustom` flag, so
+// treat them as auto-titled when the title is the placeholder or matches what
+// auto-titling would have produced for the current content.
+const isAutoTitled = (f: MarkdownFile): boolean => {
+  if (f.titleIsCustom === false) return true;
+  if (f.titleIsCustom === true) return false;
+  return f.title === 'Untitled.md' || f.title === deriveTitleFromContent(f.content);
+};
+
+const formatRelativeTime = (timestamp: number): string => {
+  const diffSec = Math.round((Date.now() - timestamp) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.round(diffMin / 60);
+  return `${diffHour}h ago`;
+};
 
 function App() {
   const [files, setFiles] = useState<MarkdownFile[]>(() => {
-    const saved = localStorage.getItem('markdown-files');
+    const saved = safeGetItem('markdown-files');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -110,7 +171,7 @@ function App() {
       updatedAt: Date.now()
     };
     // Migrate legacy content if it exists
-    const legacyContent = localStorage.getItem('markdown-content');
+    const legacyContent = safeGetItem('markdown-content');
     if (legacyContent && legacyContent !== SAMPLE_MARKDOWN) {
       const migratedFile: MarkdownFile = {
         id: 'migrated',
@@ -124,12 +185,14 @@ function App() {
   });
 
   const [activeFileId, setActiveFileId] = useState<string>(() => {
-    const savedActive = localStorage.getItem('active-file-id');
-    if (savedActive && files.some(f => f.id === savedActive)) {
+    const savedActive = safeGetItem('active-file-id');
+    if (savedActive && files.some(f => f.id === savedActive && !f.deleted)) {
       return savedActive;
     }
-    return files[0]?.id || 'default';
+    return (files.find(f => !f.deleted) ?? files[0])?.id || 'default';
   });
+
+  const storageWriteFailed = useSyncExternalStore(subscribeStorageStatus, getStorageWriteFailed);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -139,13 +202,13 @@ function App() {
   const [editingTitle, setEditingTitle] = useState('');
 
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('theme') as Theme;
+    const saved = safeGetItem('theme') as Theme;
     return ['light', 'dark', 'sepia', 'cyberpunk'].includes(saved) ? saved : 'light';
   });
 
   const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'split'>(() => {
-    const saved = localStorage.getItem('active-tab') as 'editor' | 'preview' | 'split';
+    const saved = safeGetItem('active-tab') as 'editor' | 'preview' | 'split';
     if (['editor', 'preview', 'split'].includes(saved)) {
       if (window.innerWidth <= 768 && saved === 'split') {
         return 'editor';
@@ -158,7 +221,7 @@ function App() {
   const [isSyncScrollEnabled, setIsSyncScrollEnabled] = useState(true);
 
   useEffect(() => {
-    localStorage.setItem('active-tab', activeTab);
+    safeSetItem('active-tab', activeTab);
   }, [activeTab]);
 
   useEffect(() => {
@@ -172,25 +235,129 @@ function App() {
   }, [activeTab]);
 
   // Preview / PDF custom settings
-  const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('preview-font-family') || "'Inter', system-ui, sans-serif");
-  const [fontSize, setFontSize] = useState(() => localStorage.getItem('preview-font-size') || "1rem");
-  const [lineHeight, setLineHeight] = useState(() => localStorage.getItem('preview-line-height') || "1.7");
-  const [margin, setMargin] = useState(() => localStorage.getItem('preview-margin') || "1.5rem");
+  const [fontFamily, setFontFamily] = useState(() => safeGetItem('preview-font-family') || "'Inter', system-ui, sans-serif");
+  const [fontSize, setFontSize] = useState(() => safeGetItem('preview-font-size') || "1rem");
+  const [lineHeight, setLineHeight] = useState(() => safeGetItem('preview-line-height') || "1.7");
+  const [margin, setMargin] = useState(() => safeGetItem('preview-margin') || "1.5rem");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Sync settings to localStorage
   useEffect(() => {
-    localStorage.setItem('preview-font-family', fontFamily);
+    safeSetItem('preview-font-family', fontFamily);
   }, [fontFamily]);
   useEffect(() => {
-    localStorage.setItem('preview-font-size', fontSize);
+    safeSetItem('preview-font-size', fontSize);
   }, [fontSize]);
   useEffect(() => {
-    localStorage.setItem('preview-line-height', lineHeight);
+    safeSetItem('preview-line-height', lineHeight);
   }, [lineHeight]);
   useEffect(() => {
-    localStorage.setItem('preview-margin', margin);
+    safeSetItem('preview-margin', margin);
   }, [margin]);
+
+  // Device Sync (local sync server)
+  const [syncEnabled, setSyncEnabled] = useState(() => safeGetItem('sync-enabled') === 'true');
+  const [syncServerUrl, setSyncServerUrl] = useState(() => safeGetItem('sync-server-url') || '');
+  const [syncApiKey, setSyncApiKey] = useState(() => safeGetItem('sync-api-key') || '');
+  const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
+
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
+  const closeThemeMenu = useCallback(() => setIsThemeDropdownOpen(false), []);
+  const closeSettingsMenu = useCallback(() => setIsSettingsOpen(false), []);
+  const closeSyncMenu = useCallback(() => setIsSyncSettingsOpen(false), []);
+  useDismiss(themeMenuRef, isThemeDropdownOpen, closeThemeMenu);
+  useDismiss(settingsMenuRef, isSettingsOpen, closeSettingsMenu);
+  useDismiss(syncMenuRef, isSyncSettingsOpen, closeSyncMenu);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    safeSetItem('sync-enabled', String(syncEnabled));
+  }, [syncEnabled]);
+  useEffect(() => {
+    safeSetItem('sync-server-url', syncServerUrl);
+  }, [syncServerUrl]);
+  useEffect(() => {
+    safeSetItem('sync-api-key', syncApiKey);
+  }, [syncApiKey]);
+
+  // Always-current snapshot of files for the sync loop to read, so the
+  // periodic interval/focus listener don't need `files` as a dependency
+  // (which would tear down and recreate the timer on every keystroke).
+  const filesRef = useRef<MarkdownFile[]>(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const syncInFlightRef = useRef(false);
+
+  const runSync = useCallback(async () => {
+    const url = syncServerUrl.trim();
+    if (!syncEnabled || !url) return;
+    // In-flight guard: interval, window focus and the debounce can all fire
+    // runSync; never run overlapping requests.
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    setSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const payload: SyncNote[] = filesRef.current.map((f) => ({
+        id: f.id,
+        title: f.title,
+        content: f.content,
+        updatedAt: f.updatedAt,
+        deleted: f.deleted === true
+      }));
+      const serverNotes = await syncNotes(url, payload, syncApiKey);
+      // Apply with a functional update so edits typed while the request was in
+      // flight are merged with, rather than overwritten by, a stale snapshot.
+      // applyServerNotes reuses object references for unchanged notes; return
+      // `prev` untouched when nothing changed so no-op sync ticks don't
+      // re-render the app (which would disturb preview text selection).
+      setFiles((prev) => {
+        const merged = applyServerNotes(prev, serverNotes);
+        const unchanged = merged.length === prev.length && merged.every((f, i) => f === prev[i]);
+        return unchanged ? prev : merged;
+      });
+      // No active-id fix-up needed: `activeFile` below falls back to the first
+      // visible note when the stored id points at a deleted/missing one.
+      setSyncStatus('success');
+      setLastSyncedAt(Date.now());
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncError(err instanceof Error ? err.message : 'Sync failed.');
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [syncEnabled, syncServerUrl, syncApiKey]);
+
+  // Periodic sync + sync when the tab regains focus (e.g. switching back
+  // from another device's edits taking effect while this one was idle).
+  useEffect(() => {
+    if (!syncEnabled || !syncServerUrl.trim()) return;
+    // Deferred via setTimeout(0): runSync's first line is a setState call,
+    // and calling that synchronously inside the effect body (rather than
+    // from a callback/timer) trips react-hooks/set-state-in-effect.
+    const kickoff = setTimeout(runSync, 0);
+    const interval = setInterval(runSync, 15000);
+    window.addEventListener('focus', runSync);
+    return () => {
+      clearTimeout(kickoff);
+      clearInterval(interval);
+      window.removeEventListener('focus', runSync);
+    };
+  }, [syncEnabled, syncServerUrl, runSync]);
+
+  // Push local edits shortly after the user stops typing, instead of only on
+  // the next periodic tick.
+  useEffect(() => {
+    if (!syncEnabled || !syncServerUrl.trim()) return;
+    const timeout = setTimeout(runSync, 3000);
+    return () => clearTimeout(timeout);
+  }, [files, syncEnabled, syncServerUrl, runSync]);
 
   // Scroll Sync Refs
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -198,28 +365,35 @@ function App() {
 
   // Sync files and active file ID to local storage
   useEffect(() => {
-    localStorage.setItem('markdown-files', JSON.stringify(files));
+    safeSetItem('markdown-files', JSON.stringify(files));
   }, [files]);
 
   useEffect(() => {
-    localStorage.setItem('active-file-id', activeFileId);
+    safeSetItem('active-file-id', activeFileId);
   }, [activeFileId]);
 
   useEffect(() => {
-    localStorage.setItem('theme', theme);
+    safeSetItem('theme', theme);
     // Apply theme class to document body
     document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  const activeFile = files.find(f => f.id === activeFileId) || files[0] || { id: '', title: '', content: '' };
+  const activeFile = files.find(f => f.id === activeFileId && !f.deleted)
+    || files.find(f => !f.deleted)
+    || files[0]
+    || { id: '', title: '', content: '', updatedAt: 0 };
   const markdown = activeFile.content;
 
   const setMarkdown = (newContent: string) => {
+    // Edit the note that is actually rendered (activeFile), not the raw id,
+    // which may point at a deleted/missing note.
+    const targetId = activeFile.id;
     setFiles(prev => prev.map(f => {
-      if (f.id === activeFileId) {
+      if (f.id !== targetId) return f;
+      if (!isAutoTitled(f)) {
         return { ...f, content: newContent, updatedAt: Date.now() };
       }
-      return f;
+      return { ...f, content: newContent, title: deriveTitleFromContent(newContent), titleIsCustom: false, updatedAt: Date.now() };
     }));
   };
 
@@ -277,7 +451,8 @@ function App() {
       id: newId,
       title: 'Untitled.md',
       content: '# Untitled\n\nStart writing here...',
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      titleIsCustom: false
     };
     setFiles(prev => [newFile, ...prev]);
     setActiveFileId(newId);
@@ -290,28 +465,34 @@ function App() {
 
   const handleDeleteFile = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const fileToDelete = files.find(f => f.id === id);
+    const fileToDelete = files.find(f => f.id === id && !f.deleted);
     if (!fileToDelete) return;
-    if (window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) {
-      const remainingFiles = files.filter(f => f.id !== id);
-      if (remainingFiles.length === 0) {
-        const defaultFile: MarkdownFile = {
-          id: 'default',
-          title: 'Showcase.md',
-          content: SAMPLE_MARKDOWN,
-          updatedAt: Date.now()
-        };
-        setFiles([defaultFile]);
-        setActiveFileId('default');
-      } else {
-        setFiles(remainingFiles);
-        if (activeFileId === id) {
-          setActiveFileId(remainingFiles[0].id);
-        }
+    if (!window.confirm(`Are you sure you want to delete "${fileToDelete.title}"?`)) return;
+
+    // Soft delete: keep a tombstone instead of splicing the record out, so
+    // the deletion can propagate to other synced devices instead of the
+    // file silently reappearing next time they sync (they'd otherwise see
+    // it as "a note that exists elsewhere but not here" and pull it back).
+    const remainingVisible = files.filter(f => f.id !== id && !f.deleted);
+    const tombstoned = files.map(f => (f.id === id ? { ...f, deleted: true, updatedAt: Date.now() } : f));
+
+    if (remainingVisible.length === 0) {
+      const fallbackFile: MarkdownFile = {
+        id: `file_${Date.now()}`,
+        title: 'Showcase.md',
+        content: SAMPLE_MARKDOWN,
+        updatedAt: Date.now()
+      };
+      setFiles([...tombstoned, fallbackFile]);
+      setActiveFileId(fallbackFile.id);
+    } else {
+      setFiles(tombstoned);
+      if (activeFile.id === id) {
+        setActiveFileId(remainingVisible[0].id);
       }
-      if (editingFileId === id) {
-        setEditingFileId(null);
-      }
+    }
+    if (editingFileId === id) {
+      setEditingFileId(null);
     }
   };
 
@@ -327,10 +508,14 @@ function App() {
       return;
     }
     setFiles(prev => prev.map(f => {
-      if (f.id === id) {
-        return { ...f, title: editingTitle.trim(), updatedAt: Date.now() };
-      }
-      return f;
+      if (f.id !== id) return f;
+      const trimmed = editingTitle.trim();
+      // The rename field auto-focuses right after "New File", so a blur with
+      // no actual edit (e.g. the user just clicks into the editor to start
+      // typing) must not lock the title — that would permanently disable
+      // auto-titling from the first line for every newly created file.
+      if (trimmed === f.title) return f;
+      return { ...f, title: trimmed, titleIsCustom: true, updatedAt: Date.now() };
     }));
     setEditingFileId(null);
   };
@@ -371,19 +556,28 @@ function App() {
     }
   };
 
-  const filteredFiles = files.filter(f => 
-    f.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter(f => !f.deleted && f.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
     <div className={`app-container ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      {storageWriteFailed && (
+        <div
+          className="no-print"
+          role="alert"
+          style={{ padding: '6px 12px', background: '#fef3c7', color: '#92400e', fontSize: '0.85rem', borderBottom: '1px solid #f59e0b' }}
+        >
+          Browser storage is full, so your latest changes are not being saved locally. Delete large notes or pasted images to free space.
+        </div>
+      )}
       {/* App Header */}
       <header className="app-header no-print">
         <div className="brand-section">
           <button 
             className={`sidebar-toggle-btn ${isSidebarOpen ? 'active' : ''}`}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            title={isSidebarOpen ? "Fechar painel lateral" : "Abrir painel lateral"}
+            title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
           >
             {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -398,21 +592,21 @@ function App() {
           <button
             className={activeTab === 'editor' ? 'active' : ''}
             onClick={() => setActiveTab('editor')}
-            title="Mostrar apenas o Editor"
+            title="Show editor only"
           >
             Editor
           </button>
           <button
             className={`desktop-only ${activeTab === 'split' ? 'active' : ''}`}
             onClick={() => setActiveTab('split')}
-            title="Mostrar Split (Editor + Preview)"
+            title="Show split view (editor + preview)"
           >
             Split
           </button>
           <button
             className={activeTab === 'preview' ? 'active' : ''}
             onClick={() => setActiveTab('preview')}
-            title="Mostrar apenas o Preview"
+            title="Show preview only"
           >
             Preview
           </button>
@@ -420,10 +614,14 @@ function App() {
 
         <div className="control-section">
           {/* Theme Selector Dropdown */}
-          <div className="theme-selector">
+          <div className="theme-selector" ref={themeMenuRef}>
             <button
               className="theme-btn"
-              onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+              onClick={() => {
+                setIsThemeDropdownOpen(!isThemeDropdownOpen);
+                setIsSettingsOpen(false);
+                setIsSyncSettingsOpen(false);
+              }}
               title="Change theme"
             >
               {theme === 'light' ? <Sun size={16} /> : <Moon size={16} />}
@@ -459,12 +657,13 @@ function App() {
           </div>
 
           {/* Settings Menu Dropdown */}
-          <div className="settings-menu">
+          <div className="settings-menu" ref={settingsMenuRef}>
             <button
               className={`theme-btn ${isSettingsOpen ? 'active' : ''}`}
               onClick={() => {
                 setIsSettingsOpen(!isSettingsOpen);
                 setIsThemeDropdownOpen(false);
+                setIsSyncSettingsOpen(false);
               }}
               title="Preview / PDF Export Options"
             >
@@ -531,12 +730,99 @@ function App() {
             )}
           </div>
 
+          {/* Device Sync Menu Dropdown */}
+          <div className="settings-menu" ref={syncMenuRef}>
+            <button
+              className={`theme-btn ${isSyncSettingsOpen ? 'active' : ''}`}
+              onClick={() => {
+                setIsSyncSettingsOpen(!isSyncSettingsOpen);
+                setIsThemeDropdownOpen(false);
+                setIsSettingsOpen(false);
+              }}
+              title="Device Sync Settings"
+            >
+              {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
+              <span>Sync</span>
+            </button>
+
+            {isSyncSettingsOpen && (
+              <div className="settings-dropdown">
+                <div className="settings-group">
+                  <button
+                    className={`action-btn-secondary sync-toggle-btn ${syncEnabled ? 'active' : ''}`}
+                    onClick={() => setSyncEnabled(!syncEnabled)}
+                    style={{
+                      borderColor: syncEnabled ? 'var(--accent)' : 'var(--border-color)',
+                      color: syncEnabled ? 'var(--accent)' : 'var(--text-secondary)',
+                      backgroundColor: syncEnabled ? 'var(--accent-light)' : 'var(--bg-primary)'
+                    }}
+                  >
+                    {syncEnabled ? <Cloud size={16} /> : <CloudOff size={16} />}
+                    <span>{syncEnabled ? 'Device sync enabled' : 'Enable device sync'}</span>
+                  </button>
+                </div>
+
+                <div className="settings-group">
+                  <span className="settings-label">Sync Server Address</span>
+                  <input
+                    key={isSyncSettingsOpen ? 'open' : 'closed'}
+                    type="text"
+                    className="settings-select"
+                    placeholder="http://192.168.1.xx:3041"
+                    defaultValue={syncServerUrl}
+                    onBlur={(e) => setSyncServerUrl(e.target.value.trim())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="settings-group">
+                  <span className="settings-label">API Key (only if your server requires one)</span>
+                  <input
+                    key={isSyncSettingsOpen ? 'open-key' : 'closed-key'}
+                    type="password"
+                    className="settings-select"
+                    placeholder="Leave empty for a plain LAN-only server"
+                    defaultValue={syncApiKey}
+                    onBlur={(e) => setSyncApiKey(e.target.value.trim())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="settings-group">
+                  <button
+                    className="action-btn-secondary"
+                    onClick={runSync}
+                    disabled={!syncEnabled || !syncServerUrl.trim() || syncStatus === 'syncing'}
+                  >
+                    <RefreshCw size={14} className={syncStatus === 'syncing' ? 'spin' : ''} />
+                    <span>Sync Now</span>
+                  </button>
+                  <span className="settings-label" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
+                    {syncStatus === 'syncing' && 'Syncing…'}
+                    {syncStatus === 'success' && lastSyncedAt && `Last synced ${formatRelativeTime(lastSyncedAt)}`}
+                    {syncStatus === 'error' && syncError && `Error: ${syncError}`}
+                    {syncStatus === 'idle' && !syncServerUrl.trim() && 'Enter a server address to start syncing.'}
+                    {syncStatus === 'idle' && syncServerUrl.trim() && !syncEnabled && 'Sync is off.'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Sync Scroll Toggle Button */}
           {activeTab === 'split' && (
             <button
               className={`action-btn-secondary ${isSyncScrollEnabled ? 'active' : ''}`}
               onClick={() => setIsSyncScrollEnabled(!isSyncScrollEnabled)}
-              title={isSyncScrollEnabled ? "Desativar Scroll Sincronizado" : "Ativar Scroll Sincronizado"}
+              title={isSyncScrollEnabled ? "Disable synchronized scrolling" : "Enable synchronized scrolling"}
               style={{
                 borderColor: isSyncScrollEnabled ? 'var(--accent)' : 'var(--border-color)',
                 color: isSyncScrollEnabled ? 'var(--accent)' : 'var(--text-secondary)',
@@ -574,12 +860,12 @@ function App() {
             <Search size={16} className="search-icon" />
             <input
               type="text"
-              placeholder="Pesquisar arquivos..."
+              placeholder="Search files..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {searchQuery && (
-              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Limpar pesquisa">
+              <button className="clear-search-btn" onClick={() => setSearchQuery('')} title="Clear search">
                 <X size={14} />
               </button>
             )}
@@ -587,7 +873,7 @@ function App() {
 
           <div className="file-list">
             {filteredFiles.map((file) => {
-              const isActive = file.id === activeFileId;
+              const isActive = file.id === activeFile.id;
               const isEditing = file.id === editingFileId;
 
               return (
@@ -624,7 +910,7 @@ function App() {
                       <button
                         className="file-action-btn"
                         onClick={(e) => handleStartRename(file.id, file.title, e)}
-                        title="Renomear"
+                        title="Rename"
                       >
                         <Edit2 size={14} />
                       </button>
@@ -632,7 +918,7 @@ function App() {
                     <button
                       className="file-action-btn delete"
                       onClick={(e) => handleDeleteFile(file.id, e)}
-                      title="Excluir"
+                      title="Delete"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -641,7 +927,7 @@ function App() {
               );
             })}
             {filteredFiles.length === 0 && (
-              <div className="empty-search">Nenhum arquivo encontrado</div>
+              <div className="empty-search">No files found</div>
             )}
           </div>
         </aside>
