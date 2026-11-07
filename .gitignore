@@ -31,3 +31,6 @@ sync-server/data/*.json
 
 # Sync server secrets (API key, Cloudflare tunnel token)
 sync-server/.env
+
+# Stray shell profile
+.profile

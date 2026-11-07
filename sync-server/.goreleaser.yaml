@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Release config for the sync server. Run from sync-server/:
+#   goreleaser check
+#   goreleaser release --snapshot --clean   # local dry run, nothing published
+# Real releases run in .github/workflows/sync-server-release.yml on a v* tag.
+version: 2
+
+project_name: markdown-preview-sync
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: markdown-preview-sync
+    binary: markdown-preview-sync
+    main: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    ids: [markdown-preview-sync]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - src: ../LICENSE
+        dst: .
+        strip_parent: true
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+dockers_v2:
+  - id: image
+    ids: [markdown-preview-sync]
+    dockerfile: Dockerfile.release
+    images:
+      - ghcr.io/henriquefps/markdown-preview-sync
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: markdown-preview-sync
+      org.opencontainers.image.description: Self-hosted sync server for Markdown Previewer
+      org.opencontainers.image.source: https://github.com/henriquefps/markdown-preview
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+
+release:
+  github:
+    owner: henriquefps
+    name: markdown-preview
+  name_template: "Sync server {{ .Tag }}"
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"

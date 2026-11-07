@@ -1,0 +1,23 @@
+[
+  {
+    "id": "a1",
+    "title": "Hello v2",
+    "content": "updated\ttab",
+    "updatedAt": 1762500005000,
+    "deleted": false
+  },
+  {
+    "id": "b2",
+    "title": "Deleted one",
+    "content": "",
+    "updatedAt": 1762500001234,
+    "deleted": true
+  },
+  {
+    "id": "c3",
+    "title": "Tasks",
+    "content": "- [ ] one\n- [x] two\n\n```js\nconsole.log(1)\n```",
+    "updatedAt": 1762500002000,
+    "deleted": false
+  }
+]

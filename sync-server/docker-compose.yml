@@ -1,25 +1,34 @@
 services:
   markdown-sync:
-    build: .
+    image: ghcr.io/henriquefps/markdown-preview-sync:latest
+    # To build from this directory instead of pulling the published image:
+    # build: .
     container_name: markdown-preview-sync
     ports:
       - "3041:3041"
     volumes:
+      # notes.json lives here. The container runs as uid 65532: a ./data
+      # directory created by the old Node image (owned by root) needs
+      #   sudo chown -R 65532:65532 ./data
+      # once, or uncomment `user` below to keep running as root.
       - ./data:/app/data
+    # user: "0:0"
     environment:
-      # Required once this is reachable from outside your LAN (e.g. behind
-      # the cloudflared tunnel below) — otherwise anyone with the URL could
-      # read/write your notes. Set in .env, never commit the real value.
+      # Required once this is reachable through the cloudflared tunnel below
+      # (or any proxy): without a key the server refuses tunnelled requests.
+      # Generate one with `docker run --rm ghcr.io/henriquefps/markdown-preview-sync genkey`.
+      # Set it in .env, never commit the real value.
       - SYNC_API_KEY=${SYNC_API_KEY:-}
+      # Optional CORS allow-list, comma separated. Empty = any origin.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     restart: unless-stopped
 
-  # Optional: only needed if you want this server reachable outside your LAN
-  # (e.g. from a phone on mobile data, or because your app is served over
-  # HTTPS and browsers block it from calling a plain-HTTP LAN address). Get
-  # CLOUDFLARE_TUNNEL_TOKEN from the Zero Trust dashboard when you create the
-  # tunnel; put it in .env, never in this file. See README.md.
+  # Optional: makes the server reachable over HTTPS from anywhere through a
+  # Cloudflare Tunnel. Remove this service if you only sync on your LAN.
+  # CLOUDFLARE_TUNNEL_TOKEN comes from the Zero Trust dashboard (see
+  # README.md); put it in .env, never in this file.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.3
     container_name: markdown-preview-sync-tunnel
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     restart: unless-stopped
