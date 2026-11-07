@@ -89,7 +89,7 @@ export function FileSidebar(props: FileSidebarProps) {
   return (
     <Sidebar
       variant="inset"
-      className="no-print top-(--header-height) h-[calc(100svh-var(--header-height))]!"
+      className="no-print top-(--header-height) h-[calc(100dvh-var(--header-height))]!"
     >
       <SidebarHeader className="gap-2">
         <Button onClick={props.onCreate} className="w-full">
@@ -138,7 +138,7 @@ export function FileSidebar(props: FileSidebarProps) {
                         className={cn(
                           'group/file relative flex min-h-14 items-center rounded-md transition-colors hover:bg-sidebar-accent/60',
                           // --muted equals the sidebar color in light, so the selected fill uses --sidebar-accent.
-                          active && 'bg-sidebar-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-sidebar-accent'
+                          active && 'bg-sidebar-accent font-medium hover:bg-sidebar-accent'
                         )}
                       >
                         <button
