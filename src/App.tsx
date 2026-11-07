@@ -558,6 +558,22 @@ function App() {
     });
   };
 
+  // Close any open menu/sheet/dialog and wait for its portal content to unmount,
+  // so it can't be captured in the printed page.
+  const dismissFloatingLayers = async () => {
+    const selector =
+      '[data-radix-popper-content-wrapper], [role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"], [role="tooltip"]';
+    if (document.querySelector(selector)) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+    }
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const deadline = performance.now() + 400;
+    while (document.querySelector(selector) && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  };
+
   const triggerPrint = async () => {
     // Custom web fonts (Inter, Fira Code) load asynchronously; printing before
     // they're ready causes the browser to fall back to a substitute font that
@@ -570,6 +586,7 @@ function App() {
     } catch {
       // Ignore font-loading errors and print with whatever is available.
     }
+    await dismissFloatingLayers();
     window.print();
   };
 
