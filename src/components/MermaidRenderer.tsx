@@ -1,13 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 
-// Initialize mermaid
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  fontFamily: 'Inter, system-ui, sans-serif'
-});
+type MermaidTheme = 'default' | 'dark';
+
+// 'strict' keeps mermaid from emitting scripts/unsafe HTML: notes can arrive
+// from the sync server, and the SVG is injected with dangerouslySetInnerHTML.
+const initMermaid = (theme: MermaidTheme) => {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme,
+    securityLevel: 'strict',
+    fontFamily: 'Inter, system-ui, sans-serif'
+  });
+};
+
+const readAppTheme = (): MermaidTheme => {
+  const cls = document.body.classList;
+  return cls.contains('theme-dark') || cls.contains('theme-cyberpunk') ? 'dark' : 'default';
+};
+
+// Tracks the app theme (body class `theme-*`) so diagrams re-render on change.
+const useMermaidTheme = (): MermaidTheme => {
+  const [theme, setTheme] = useState<MermaidTheme>(readAppTheme);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(readAppTheme()));
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
+};
+
+let renderCounter = 0;
 
 interface MermaidRendererProps {
   chart: string;
@@ -17,10 +40,14 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const theme = useMermaidTheme();
+  const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
 
   useEffect(() => {
     let isMounted = true;
-    const elementId = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
+    // useId is unique per component instance; the counter keeps successive
+    // renders of the same instance from colliding either.
+    const elementId = `mermaid-${baseId}-${renderCounter++}`;
 
     const renderChart = async () => {
       if (!containerRef.current) return;
@@ -30,6 +57,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
         // Clean up chart text (remove extra spaces or newlines that cause parse errors)
         const cleanChart = chart.trim();
         
+        initMermaid(theme);
         // Parse and render the chart
         const { svg: renderedSvg } = await mermaid.render(elementId, cleanChart);
         
@@ -66,7 +94,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
     return () => {
       isMounted = false;
     };
-  }, [chart]);
+  }, [chart, theme, baseId]);
 
   if (error) {
     return (
