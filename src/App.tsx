@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Edit2, Search, Menu, X, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
 import { syncNotes, type SyncNote } from './lib/sync';
+import { useDismiss } from './hooks/useDismiss';
 import { safeGetItem, safeSetItem, subscribeStorageStatus, getStorageWriteFailed } from './lib/storage';
 import './components/MarkdownViewer.css';
 
@@ -259,6 +260,16 @@ function App() {
   const [syncServerUrl, setSyncServerUrl] = useState(() => safeGetItem('sync-server-url') || '');
   const [syncApiKey, setSyncApiKey] = useState(() => safeGetItem('sync-api-key') || '');
   const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
+
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
+  const closeThemeMenu = useCallback(() => setIsThemeDropdownOpen(false), []);
+  const closeSettingsMenu = useCallback(() => setIsSettingsOpen(false), []);
+  const closeSyncMenu = useCallback(() => setIsSyncSettingsOpen(false), []);
+  useDismiss(themeMenuRef, isThemeDropdownOpen, closeThemeMenu);
+  useDismiss(settingsMenuRef, isSettingsOpen, closeSettingsMenu);
+  useDismiss(syncMenuRef, isSyncSettingsOpen, closeSyncMenu);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -603,7 +614,7 @@ function App() {
 
         <div className="control-section">
           {/* Theme Selector Dropdown */}
-          <div className="theme-selector">
+          <div className="theme-selector" ref={themeMenuRef}>
             <button
               className="theme-btn"
               onClick={() => {
@@ -646,7 +657,7 @@ function App() {
           </div>
 
           {/* Settings Menu Dropdown */}
-          <div className="settings-menu">
+          <div className="settings-menu" ref={settingsMenuRef}>
             <button
               className={`theme-btn ${isSettingsOpen ? 'active' : ''}`}
               onClick={() => {
@@ -720,7 +731,7 @@ function App() {
           </div>
 
           {/* Device Sync Menu Dropdown */}
-          <div className="settings-menu">
+          <div className="settings-menu" ref={syncMenuRef}>
             <button
               className={`theme-btn ${isSyncSettingsOpen ? 'active' : ''}`}
               onClick={() => {
