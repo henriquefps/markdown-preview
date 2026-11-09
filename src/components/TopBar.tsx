@@ -9,6 +9,9 @@ import {
   LinkSimpleIcon,
   PaletteIcon,
   ArrowsClockwiseIcon,
+  BookOpenTextIcon,
+  GithubLogoIcon,
+  InfoIcon,
 } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -28,7 +32,29 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IconButton } from '@/components/IconButton';
 import { ThemeMenu, ThemeMenuGroups } from '@/components/ThemeMenu';
+import { REPO_URL, SYNC_GUIDE_PATH } from '@/lib/syncDownloads';
 import { cn } from '@/lib/utils';
+
+/** "About" links, shared by the phone overflow menu and the desktop About menu. */
+function AboutItems() {
+  return (
+    <>
+      <DropdownMenuLabel>About</DropdownMenuLabel>
+      <DropdownMenuItem asChild>
+        <a href={SYNC_GUIDE_PATH}>
+          <BookOpenTextIcon />
+          Sync server guide
+        </a>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <a href={REPO_URL} target="_blank" rel="noreferrer">
+          <GithubLogoIcon />
+          Source on GitHub
+        </a>
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 // --muted equals the chrome background in light, so the selected view is a raised card chip.
 const VIEW_ITEM = 'px-3 data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-xs';
@@ -161,10 +187,27 @@ export function TopBar(props: TopBarProps) {
                   <ThemeMenuGroups />
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <AboutItems />
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
           <>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="About">
+                      <InfoIcon />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>About</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="min-w-52">
+                <AboutItems />
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ThemeMenu />
             <IconButton label="Settings" tooltip="Preview and PDF settings" onClick={props.onOpenSettings}>
               <GearSixIcon />

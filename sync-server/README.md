@@ -24,23 +24,24 @@
 
 ### Option 1: download a binary
 
-Download the archive for your system from the [latest release](https://github.com/henriquefps/markdown-preview/releases/latest):
+Download the archive for your system from the [latest release](https://github.com/henriquefps/markdown-preview/releases/latest), or from the [setup guide](https://markdown.hfps.dev/sync), which picks the right one for you. The names carry no version, so `https://github.com/henriquefps/markdown-preview/releases/latest/download/<archive>` always points at the newest build:
 
 | System | Archive |
 | --- | --- |
-| Linux, Intel/AMD | `markdown-preview-sync_<version>_linux_amd64.tar.gz` |
-| Linux, ARM (Raspberry Pi 4/5 with a 64-bit OS) | `markdown-preview-sync_<version>_linux_arm64.tar.gz` |
-| macOS, Apple silicon | `markdown-preview-sync_<version>_darwin_arm64.tar.gz` |
-| macOS, Intel | `markdown-preview-sync_<version>_darwin_amd64.tar.gz` |
-| Windows, Intel/AMD | `markdown-preview-sync_<version>_windows_amd64.zip` |
-| Windows, ARM | `markdown-preview-sync_<version>_windows_arm64.zip` |
+| Linux, Intel/AMD | `markdown-preview-sync_linux_amd64.tar.gz` |
+| Linux, ARM (Raspberry Pi 4/5 with a 64-bit OS) | `markdown-preview-sync_linux_arm64.tar.gz` |
+| macOS, Apple silicon | `markdown-preview-sync_darwin_arm64.tar.gz` |
+| macOS, Intel | `markdown-preview-sync_darwin_amd64.tar.gz` |
+| Windows, Intel/AMD | `markdown-preview-sync_windows_amd64.zip` |
+| Windows, ARM | `markdown-preview-sync_windows_arm64.zip` |
 
 `checksums.txt` in the same release lists the SHA-256 of every archive.
 
 Then extract and run it:
 
 ```sh
-tar xzf markdown-preview-sync_*_linux_amd64.tar.gz
+curl -LO https://github.com/henriquefps/markdown-preview/releases/latest/download/markdown-preview-sync_linux_amd64.tar.gz
+tar xzf markdown-preview-sync_linux_amd64.tar.gz
 ./markdown-preview-sync
 ```
 

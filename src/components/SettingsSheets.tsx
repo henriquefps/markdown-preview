@@ -1,5 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react';
-import { ArrowsClockwiseIcon } from '@phosphor-icons/react';
+import { ArrowRightIcon, ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { CodeBlock, DownloadButton, MacNote, OtherPlatformsMenu } from '@/components/SyncDownload';
+import { DOCKER_RUN, SYNC_GUIDE_PATH, useDetectedPlatform } from '@/lib/syncDownloads';
 import { cn } from '@/lib/utils';
 
 // Full screen below sm, a side panel from sm up. The base sheet sets w-3/4 and sm:max-w-sm as
@@ -256,6 +258,49 @@ export function SyncSettingsSheet({
           {statusText}
         </p>
       </div>
+      <Separator />
+      <GetSyncServer />
     </SettingsSheet>
+  );
+}
+
+/** "Don't have a sync server yet?": download for this computer, or point phones at the guide. */
+function GetSyncServer() {
+  const platform = useDetectedPlatform();
+  const guideLink = (
+    <Button variant="link" asChild className="h-auto self-start p-0">
+      <a href={SYNC_GUIDE_PATH}>
+        Setup guide
+        <ArrowRightIcon data-icon="inline-end" />
+      </a>
+    </Button>
+  );
+  return (
+    <section aria-labelledby="get-sync-server" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h3 id="get-sync-server" className="text-sm font-medium">
+          Don&apos;t have a sync server yet?
+        </h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          {platform.kind === 'mobile'
+            ? 'The sync server runs on a computer (at home, a Raspberry Pi, a NAS or a small VPS), not on a phone or tablet. Set it up there, then connect this device.'
+            : 'It is one small free program you run on a computer at home, a Raspberry Pi, a NAS or a small VPS. Your notes stay in a single file you own.'}
+        </p>
+      </div>
+      {platform.kind !== 'mobile' && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <DownloadButton platform={platform} />
+            <OtherPlatformsMenu />
+          </div>
+          {platform.kind === 'desktop' && platform.asset.os === 'darwin' && <MacNote />}
+          <div className="flex flex-col gap-2">
+            <p className="text-[0.8125rem] text-muted-foreground">Or run it with Docker:</p>
+            <CodeBlock code={DOCKER_RUN} what="Docker command" />
+          </div>
+        </>
+      )}
+      {guideLink}
+    </section>
   );
 }
