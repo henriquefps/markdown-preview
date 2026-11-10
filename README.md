@@ -50,6 +50,19 @@ When the app is opened over HTTPS, the server needs an HTTPS address too. [sync-
 
 The icon and social preview live in `docs/img`. The icon glyph and the social preview source are in `scripts/`. The icon files used by the site are in `public/`.
 
+The icon is a [Designer](https://designer.hfps.dev) project, `scripts/glyph.designer.json` (open it there to edit it). To rebuild every icon file after changing it:
+
+```sh
+DESIGNER="github:henriquefps/logo-designer#d99b116e33a5"
+bunx --bun "$DESIGNER" to-svg scripts/glyph.designer.json --glyph -o scripts/glyph.svg   # then re-add the one-line comment header
+bunx --bun "$DESIGNER" icons scripts/glyph.designer.json -o /tmp/icons                     # prints the keyline report, writes review-sheet.png
+cp /tmp/icons/docs-img/* docs/img/ && cp /tmp/icons/docs-img/icon.svg scripts/icon.svg
+cp /tmp/icons/site/{favicon.ico,apple-touch-icon.png,icon-192.png,icon-512.png,icon-maskable-512.png} public/
+cp /tmp/icons/site/icon.svg public/favicon.svg && cp /tmp/icons/site/icon-512.png public/logo.png
+```
+
+The social preview is rendered from `scripts/social-preview.html` (2560 x 1280).
+
 ## License
 
 [MIT](LICENSE)
