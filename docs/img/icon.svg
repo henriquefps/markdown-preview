@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512"><rect width="128" height="128" rx="28" fill="#5b7a3a"/><g transform="translate(14 14) scale(0.78125)">
-<g transform="translate(14 12)" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
-  <path d="M24 9 H76" opacity="0.45"/>
-  <path d="M15 21 H85" opacity="0.7"/>
-  <rect x="6" y="33" width="88" height="62" rx="12"/>
-  <path d="M22 78 V50 L34 64 L46 50 V78"/>
-  <path d="M71 50 V76"/>
-  <path d="M60 66 L71 77 L82 66"/>
-</g>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512"><rect width="128" height="128" rx="28" fill="#2063b0"/><g transform="translate(0.154 0.154) scale(0.99759)"><path d="M30.985 30.985L97.015 30.985C102.817 30.985 107.52 35.688 107.52 41.49L107.52 86.51C107.52 92.312 102.817 97.015 97.015 97.015L30.985 97.015C25.183 97.015 20.48 92.312 20.48 86.51L20.48 41.49C20.48 35.688 25.183 30.985 30.985 30.985ZM32.486 83.509L32.486 45.992L42.99 45.992L50.494 57.997L57.997 45.992L68.502 45.992L68.502 83.509L57.997 83.509L57.997 64L50.494 76.006L42.99 64L42.99 83.509ZM79.007 45.992L89.512 45.992L89.512 64L98.516 64L84.259 83.509L70.003 64L79.007 64Z" fill-rule="evenodd" fill="#fff"/></g></svg>
